@@ -1,0 +1,15 @@
+# depslib dependency file v1.0
+1477970408 source:c:\users\lucas\downloads\dronekit\simulation\simulation number cruncher\main.cpp
+	<windows.h>
+	<gdiplus.h>
+	<iostream>
+
+1478567692 source:c:\users\lucas\downloads\dronekit\simulation\simulation number cruncher\version 1\main.cpp
+	<windows.h>
+	<gdiplus.h>
+	<iostream>
+	<vector>
+	<cmath>
+	<cstdlib>
+	<ctime>
+

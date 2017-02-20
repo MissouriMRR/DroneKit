@@ -1,0 +1,26 @@
+Sim 5 updates
+ - Avoids ground robots near obstacle robots
+ - Drone turns the ground robot below it until its rotation is in the range Up - (45 / 2) to Up + (45 / 2)) degrees.
+   basically as straight as the drone can get
+
+Sim 6 updates
+ - Now drone's movement is "smooth"
+ - The sider was messed up because each position on it accessed the frame ahead of the one that should be access - fixed
+ - The playback would keep playing frames the after the last frame - fixed
+ - Added a nicer html interface with simulation
+ - Drone now does not turn ground robots even if they are rotated a little counterclockwise to the range Up - (45 / 2) to Up + (45 / 2)).  This is so because we know the ground robots will get turned clockwise a little in the 5 second intervals.
+
+Sim 7 updates
+ - Now the user can run many matches and get the averages of the drone's performance.  In the future, we can compare the different versions by those stats.
+ 
+Sim 8 updates
+ - Sped up drone acceleration a bit
+ - The drone will go for ground robots are going to go off the edge
+
+Sim 9 updates
+ - Only goes for robots aiming the wrong way
+ - Doesn't move from a robot until it is facing the right direction or until another robot is about to go off the edge
+ - Fixed a problem so that 100 points are subtracted and not added for every minute the game was running.  I also fixed this for sim 8 and sim 7 (versions before 7 didn't keep score)
+ - Now makes drone angle robots away from the sides.
+ - Fixed problem where drone avoided ground robots based on pixels and not meters (pixel size and spacing can change per screen)
+ - Fixed problem if statement checked that a ground robot had gone out of the arena where it should of checked to make sure it was still in and moving.  However, this change will no affect on the output of matches

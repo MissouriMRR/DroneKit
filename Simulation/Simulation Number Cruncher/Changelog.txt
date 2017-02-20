@@ -1,0 +1,21 @@
+Version 1:
+	- Plays matches with no drone movement
+
+Version 2:
+	- Plays matches with drone movement using multipliers in a data set.  After each data set has some runs, it rates them by their score, changes the ones with the lowest score, and tries again.
+	- Multipliers added:
+		- Dist from green line (-5, 5)
+		- Dist from closest edge except green line (-5, 5)
+		- Dist from drone
+
+Version 3:
+	- Now is multithreaded
+	- Fixed code in Make_New_Sets() so that the the multiplied the right winning data sets to make a new data set
+
+Version 4:
+	- Fixed bug in scoring where high score was an int not float
+	- Fixed bug in detecting Find_Direction_Mult where a || should have been a &&
+	- Multipliers added:
+		- If going to end up less than 1 meter from or over an edge before reverse, mult added (Head_Off_Edge_Mult)
+		- If the ground robot is in the direction range we want (Find_Direction_Mult)
+		- A minimum and maximum rotation range where some points will be rewarded for being (Rot_Min and Rot_Max)
