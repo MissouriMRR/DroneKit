@@ -16,10 +16,11 @@ import time
 
 class Tower(object):
   ATTITUDE_BIT_FLAGS = 0b11100000
-  LAND_ALTITUDE = 1
+  LAND_ALTITUDE = 0.5
   STANDARD_ATTITUDES = { 
                         "LEVEL" : [1, 0, 0, 0],
-                        "FORWARD_5_DEG" : [0.99905, 0, -0.04362, 0] 
+                        "FORWARD" : [0.99905, 0, -0.04362, 0], # -5 degrees.
+                        "BACKWARD" : [0.99905, 0, 0.04362, 0]  # +5 degrees.
                        }
   STANDARD_SPEEDS = { 
                       "HOVER"      : 0.45,
@@ -84,20 +85,34 @@ class Tower(object):
     self.vehicle.flush()
     print("Sent message.")
 
-  def takeoff_using_vectors(self, target_altitude, thrust):
-    set_thrust_angle_using_vectors(STANDARD_ATTITUDES["LEVEL"], thrust)
+  def return_to_hover():
+    self.vehicle_state = "HOVER"
+    set_thrust_angle_using_vectors(STANDARD_ATTITUDES["LEVEL"], STANDARD_SPEEDS["HOVER"])
+
+  def takeoff_using_vectors(self, target_altitude, speed):
+    set_thrust_angle_using_vectors(STANDARD_ATTITUDES["LEVEL"], speed)
 
     while(vehicle.location.global_relative_frame.alt <= target_altitude):
       time.sleep(1)
-    else:
-      set_thrust_angle_using_vectors(STANDARD_ATTITUDES["LEVEL"], STANDARD_SPEEDS["HOVER"])
-      print('Reached target altitude:{0:.2f}m'.format(vehicle.location.global_relative_frame.alt))
-      #After we reach the target altitude in meters, break out of the loop. 
-      #If you're above 1300 for a desired speed, you should ramp down to 1300 here as well.
+
+    return_to_hover()
+    print('Reached target altitude:{0:.2f}m'.format(vehicle.location.global_relative_frame.alt))
+    #After we reach the target altitude in meters, break out of the loop. 
+    #If you're above 1300 for a desired speed, you should ramp down to 1300 here as well.
+
+  def fly_for_time(self, duration, direction, speed):
+    duration = timedelta(seconds=duration)
+    end_manuever = datetime.now() + duration
+    set_thrust_angle_using_vectors(STANDARD_ATTITUDES["FORWARD"], speed)
+    while(end_manuever <= datetime.now()):
+      time.sleep(1)
+    return_to_hover()
 
   def land(self):
     self.vehicle.mode = VehicleMode("LAND")
-      while(vehicle.location.global_relative_frame.alt <= LAND_ALTITUDE):
-        time.sleep(1)
+    while(vehicle.location.global_relative_frame.alt <= LAND_ALTITUDE):
+      time.sleep(1)
+    else:
+      self.vehicle_state = "GROUND_IDLE"
 
 
