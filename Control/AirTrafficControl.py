@@ -123,8 +123,8 @@ class Tower(object):
 
   def set_angle_thrust(self, attitude, thrust):
 
-    if self.vehicle.mode != "GUIDED_NOGPS":
-      self.vehicle.mode = "GUIDED_NOGPS"
+    if self.vehicle.mode.name != "GUIDED_NOGPS":
+      self.vehicle.mode = dronekit.VehicleMode("GUIDED_NOGPS")
     
     print("Building MAVLink message...")
     self.vehicle.mode = dronekit.VehicleMode("STABILIZE")
