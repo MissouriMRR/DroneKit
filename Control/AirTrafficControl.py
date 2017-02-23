@@ -10,7 +10,6 @@
 # pylint: disable=C, F, I, R, W
 
 from datetime import datetime, timedelta
-from enum import Enum
 from os import system
 from time import sleep
 
@@ -52,14 +51,14 @@ class Attitude(dronekit.Attitude):
     return q
 
 
-class Standard_Attitudes(Enum):
+class Standard_Attitudes(object):
   level = Attitude(0,0,0)
   forward = Attitude(-5,0,0) # -5 degrees.
   backward = Attitude(5,0,0)  # +5 degrees.
   left = Attitude(-5, 0, -5)
   right = Attitude(-5, 0, 5)
   
-class Standard_Thrusts(Enum):
+class Standard_Thrusts(object):
   hover = 0.45
   low_speed = 0.50
   med_speed = 0.55
@@ -68,7 +67,7 @@ class Standard_Thrusts(Enum):
 class Tower(object):
   SERIAL_PORT = "/dev/ttyS1"
   BAUD_RATE = 57600
-  SIMULATOR = "tcp:127.0.0.1:5760"
+  SIMULATOR = "127.0.0.1:14560"
   STANDARD_ATTITUDE_BIT_FLAGS = 0b11100000
   TURNING_ATTITUDE_BIT_FLAGS = 0b00000000
   STANDARD_THRUST_CHANGE = 0.05
