@@ -63,11 +63,11 @@ class Standard_Attitudes(object):
   turn = Attitude(-3, 0, 0)
   
 class Standard_Thrusts(object):
-  hover = 0.45
+  hover = 0.31
   takeoff = 0.501
-  low_speed = 0.40
-  med_speed = 0.55
-  high_speed = 0.60
+  low_speed = 0.35
+  med_speed = 0.45
+  high_speed = 0.55
 
 class Tower(object):
   SERIAL_PORT = "/dev/ttyS1"
