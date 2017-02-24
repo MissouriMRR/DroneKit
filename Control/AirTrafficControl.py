@@ -66,7 +66,7 @@ class Standard_Thrusts(object):
 
 class Tower(object):
   SERIAL_PORT = "/dev/ttyS1"
-  BAUD_RATE = 921600
+  BAUD_RATE = 57600
   SIMULATOR = "127.0.0.1:14551"
   STANDARD_ATTITUDE_BIT_FLAGS = 0b11100000
   TURNING_ATTITUDE_BIT_FLAGS = 0b00000000
@@ -121,14 +121,17 @@ class Tower(object):
     return uptime
 
   def set_angle_thrust(self, attitude, thrust):
-
+    
     self.vehicle.mode = dronekit.VehicleMode("GUIDED_NOGPS")
+
+    while(self.vehicle.mode.name != "GUIDED_NOGPS"):
+      time.sleep()
     
     print("Building MAVLink message...")
     message = self.vehicle.message_factory.set_attitude_target_encode(
       0,                                 # Timestamp in milliseconds since system boot (not used).
       1,                                 # System ID
-      1,                                 # Component ID
+      0,                                 # Component ID
       self.STANDARD_ATTITUDE_BIT_FLAGS,       # Bit flags. For more info, see http://mavlink.org/messages/common#SET_ATTITUDE_TARGET.
       attitude.quaternion,               # Quaternions
       0,                                 # Body roll rate.
@@ -145,7 +148,7 @@ class Tower(object):
   def return_to_hover(self):
     self.vehicle_state = "HOVER"
     self.set_angle_thrust(Standard_Attitudes.level, Standard_Thrusts.hover)
-    self.vehicle.mode = dronekit.VehicleMode("ALT HOLD")
+    self.vehicle.mode = dronekit.VehicleMode("ALT_HOLD")
 
   def takeoff(self, target_altitude, thrust):
 
@@ -198,7 +201,7 @@ class Tower(object):
 
     print("Building MAVLink message...")
 
-    self.vehicle.mode = dronekit.VehicleMode("ALT HOLD")
+    self.vehicle.mode = dronekit.VehicleMode("ALT_HOLD")
 
     message = self.vehicle.message_factory.set_attitude_target_encode(
       0,                                        # Timestamp in milliseconds since system boot (not used).
