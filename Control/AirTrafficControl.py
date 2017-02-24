@@ -67,7 +67,7 @@ class Standard_Thrusts(object):
 class Tower(object):
   SERIAL_PORT = "/dev/ttyS1"
   BAUD_RATE = 57600
-  SIMULATOR = "127.0.0.1:14560"
+  SIMULATOR = "127.0.0.1:14551"
   STANDARD_ATTITUDE_BIT_FLAGS = 0b11100000
   TURNING_ATTITUDE_BIT_FLAGS = 0b00000000
   STANDARD_THRUST_CHANGE = 0.05
@@ -122,11 +122,10 @@ class Tower(object):
 
   def set_angle_thrust(self, attitude, thrust):
 
-    if self.vehicle.mode.name != "GUIDED_NOGPS":
+    while self.vehicle.mode.name != "GUIDED_NOGPS":
       self.vehicle.mode = dronekit.VehicleMode("GUIDED_NOGPS")
     
     print("Building MAVLink message...")
-    self.vehicle.mode = dronekit.VehicleMode("STABILIZE")
     message = self.vehicle.message_factory.set_attitude_target_encode(
       0,                                 # Timestamp in milliseconds since system boot (not used).
       0,                                 # System ID
@@ -151,6 +150,8 @@ class Tower(object):
 
   def takeoff(self, target_altitude, thrust):
 
+    self.arm_drone()
+    
     self.set_angle_thrust(Standard_Attitudes.level, thrust)
 
     while(self.vehicle.location.global_relative_frame.alt <= target_altitude):
