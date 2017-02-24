@@ -140,12 +140,11 @@ class Tower(object):
     while(self.vehicle.mode.name != "GUIDED_NOGPS"):
       sleep(1)
     
-    print("Building MAVLink message...")
     message = self.vehicle.message_factory.set_attitude_target_encode(
       0,                                 # Timestamp in milliseconds since system boot (not used).
       0,                                 # System ID
       0,                                 # Component ID
-      self.STANDARD_ATTITUDE_BIT_FLAGS,       # Bit flags. For more info, see http://mavlink.org/messages/common#SET_ATTITUDE_TARGET.
+      self.STANDARD_ATTITUDE_BIT_FLAGS,  # Bit flags. For more info, see http://mavlink.org/messages/common#SET_ATTITUDE_TARGET.
       attitude.quaternion,               # Quaternions
       0,                                 # Body roll rate.
       0,                                 # Body pitch rate.
@@ -231,13 +230,12 @@ class Tower(object):
 
       updated_attitude = Attitude(pitch_angle, self.last_attitude.yaw, roll_angle, True)
 
-      print("Building MAVLink message...")
       message = self.vehicle.message_factory.set_attitude_target_encode(
         0,                                        # Timestamp in milliseconds since system boot (not used).
-        1,                                        # System ID
-        1,                                        # Component ID
+        0,                                        # System ID
+        0,                                        # Component ID
         self.TURNING_ATTITUDE_BIT_FLAGS,          # Bit flags. For more info, see http://mavlink.org/messages/common#SET_ATTITUDE_TARGET.
-        updated_attitude.quaternion,                     # Attitude quaternion.
+        updated_attitude.quaternion,              # Attitude quaternion.
         0,                                        # Body roll rate.
         0,                                        # Body pitch rate.
         0,                                        # Body yaw rate.
