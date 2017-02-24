@@ -68,7 +68,7 @@ class Tower(object):
   SERIAL_PORT = "/dev/ttyS1"
   BAUD_RATE = 57600
   SIMULATOR = "127.0.0.1:14551"
-  STANDARD_ATTITUDE_BIT_FLAGS = 0b11100000
+  STANDARD_ATTITUDE_BIT_FLAGS = 0b00000111
   TURNING_ATTITUDE_BIT_FLAGS = 0b00000000
   STANDARD_THRUST_CHANGE = 0.05
   MAX_TURN_TIME = 5
@@ -113,9 +113,9 @@ class Tower(object):
       print("\nSuccessfully connected to vehicle.")
 
   def arm_drone(self):
+    self.vehicle.armed = True
     while(not self.vehicle.armed):
-      self.vehicle.armed = True
-
+      sleep(1)
   def get_uptime(self):
     uptime = time.time() - self.start_time
     return uptime
@@ -125,12 +125,12 @@ class Tower(object):
     self.vehicle.mode = dronekit.VehicleMode("GUIDED_NOGPS")
 
     while(self.vehicle.mode.name != "GUIDED_NOGPS"):
-      time.sleep()
+      sleep(1)
     
     print("Building MAVLink message...")
     message = self.vehicle.message_factory.set_attitude_target_encode(
       0,                                 # Timestamp in milliseconds since system boot (not used).
-      1,                                 # System ID
+      0,                                 # System ID
       0,                                 # Component ID
       self.STANDARD_ATTITUDE_BIT_FLAGS,       # Bit flags. For more info, see http://mavlink.org/messages/common#SET_ATTITUDE_TARGET.
       attitude.quaternion,               # Quaternions
