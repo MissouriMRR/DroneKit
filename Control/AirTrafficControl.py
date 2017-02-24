@@ -59,14 +59,14 @@ class Standard_Attitudes(object):
   right = Attitude(-5, 0, 5)
   
 class Standard_Thrusts(object):
-  hover = 0.45
-  low_speed = 0.50
+  hover = 0.501
+  low_speed = 0.40
   med_speed = 0.55
   high_speed = 0.60
 
 class Tower(object):
   SERIAL_PORT = "/dev/ttyS1"
-  BAUD_RATE = 57600
+  BAUD_RATE = 921600
   SIMULATOR = "127.0.0.1:14551"
   STANDARD_ATTITUDE_BIT_FLAGS = 0b11100000
   TURNING_ATTITUDE_BIT_FLAGS = 0b00000000
@@ -93,8 +93,8 @@ class Tower(object):
 
   def initialize_system(self):
     if not self.system_initialized:
-      print("\nEnabling serial UART connection on " + self.SERIAL_PORT + " at " + self.BAUD_RATE + " baud...")
-      return_code = system("stty -F " + self.SERIAL_PORT + " " + self.BAUD_RATE + " raw -echo -echoe -echok -crtscts")
+      print("\nEnabling serial UART connection on " + self.SERIAL_PORT + " at " + str(self.BAUD_RATE) + " baud...")
+      return_code = system("stty -F " + self.SERIAL_PORT + " " + str(self.BAUD_RATE) + " raw -echo -echoe -echok -crtscts")
       if return_code == 0:
         self.system_initialized = True
         print("\nSucessfully enabled UART connection.")
@@ -102,8 +102,8 @@ class Tower(object):
   def initialize_drone(self):
     if not self.vehicle_initialized:
       print("\nConnecting via " + self.SERIAL_PORT + " to flight controller...")
-      # self.vehicle = dronekit.connect(self.SERIAL_PORT, baud=self.BAUD_RATE, wait_ready=True)
-      self.vehicle = dronekit.connect(self.SIMULATOR, wait_ready=True)
+      self.vehicle = dronekit.connect(self.SERIAL_PORT, baud=self.BAUD_RATE, wait_ready=True)
+      # self.vehicle = dronekit.connect(self.SIMULATOR, wait_ready=True)
       self.vehicle.mode = dronekit.VehicleMode("STABILIZE")
       self.vehicle_state = "GROUND_IDLE"
       self.connected = True
@@ -122,14 +122,13 @@ class Tower(object):
 
   def set_angle_thrust(self, attitude, thrust):
 
-    while self.vehicle.mode.name != "GUIDED_NOGPS":
-      self.vehicle.mode = dronekit.VehicleMode("GUIDED_NOGPS")
+    self.vehicle.mode = dronekit.VehicleMode("GUIDED_NOGPS")
     
     print("Building MAVLink message...")
     message = self.vehicle.message_factory.set_attitude_target_encode(
       0,                                 # Timestamp in milliseconds since system boot (not used).
-      0,                                 # System ID
-      0,                                 # Component ID
+      1,                                 # System ID
+      1,                                 # Component ID
       self.STANDARD_ATTITUDE_BIT_FLAGS,       # Bit flags. For more info, see http://mavlink.org/messages/common#SET_ATTITUDE_TARGET.
       attitude.quaternion,               # Quaternions
       0,                                 # Body roll rate.
@@ -138,7 +137,7 @@ class Tower(object):
       thrust                             # Collective thrust, from 0-1.
     )
     self.vehicle.send_mavlink(message)
-    self.vehicle.flush()
+    self.vehicle.commands.upload()
     self.last_attitude = attitude
     self.last_thrust = thrust
     print("Sent message.")
@@ -203,8 +202,8 @@ class Tower(object):
 
     message = self.vehicle.message_factory.set_attitude_target_encode(
       0,                                        # Timestamp in milliseconds since system boot (not used).
-      0,                                        # System ID
-      0,                                        # Component ID
+      1,                                        # System ID
+      1,                                        # Component ID
       self.TURNING_ATTITUDE_BIT_FLAGS,          # Bit flags. For more info, see http://mavlink.org/messages/common#SET_ATTITUDE_TARGET.
       direction.quaternion,                     # Attitude quaternion.
       1,                                        # Body roll rate.
@@ -214,7 +213,7 @@ class Tower(object):
     )
 
     self.vehicle.send_mavlink(message)
-    self.vehicle.flush()
+    self.vehicle.commands.upload()
 
     print("Sent message.")
 
