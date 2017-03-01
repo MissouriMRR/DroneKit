@@ -63,22 +63,22 @@ class Standard_Attitudes(object):
   turn = Attitude(-3, 0, 0)
   
 class Standard_Thrusts(object):
-  hover = 0.31
-  takeoff = 0.501
-  low_speed = 0.35
-  med_speed = 0.45
-  high_speed = 0.55
+  hover = 0.50
+  takeoff = 0.57
+  low_speed = 0.55
+  med_speed = 0.65
+  high_speed = 0.75
 
 class Tower(object):
   SERIAL_PORT = "/dev/ttyS1"
   BAUD_RATE = 57600
   SIMULATOR = "127.0.0.1:14551"
-  STANDARD_ATTITUDE_BIT_FLAGS = 0b00000011
-  TURNING_ATTITUDE_BIT_FLAGS = 0b00000011
+  STANDARD_ATTITUDE_BIT_FLAGS = 0b00111111
+  TURNING_ATTITUDE_BIT_FLAGS = 0b00111111
   STANDARD_THRUST_CHANGE = 0.05
   MAX_TURN_TIME = 5
   LAND_ALTITUDE = 0.5
-  TURN_START_VELOCITY = -3
+  TURN_START_VELOCITY = 3
   TURN_RADIUS = 0.5 # Meters
   ANGLE_INCREMENT = 1.1
   ANGLE_DECREMENT = 0.9
@@ -168,21 +168,17 @@ class Tower(object):
     if(should_try_and_land):
       self.land()
 
-  def takeoff(self, target_altitude, thrust):
+  def takeoff(self, target_altitude):
 
     self.arm_drone()
     
     self.set_angle_thrust(Standard_Attitudes.level, Standard_Thrusts.takeoff)
 
-    sleep(1)
-
-    self.set_angle_thrust(Standard_Attitudes.level, Standard_Thrusts.low_speed)
-
     while(self.vehicle.location.global_relative_frame.alt <= target_altitude):
-      sleep(1)
+      sleep(0.25)
 
     self.hover()
-
+    
     print('Reached target altitude:{0:.2f}m'.format(self.vehicle.location.global_relative_frame.alt))
 
   def fly_for_time(self, duration, direction, target_velocity, thrust=None):
