@@ -64,7 +64,7 @@ class Standard_Attitudes(object):
   
 class Standard_Thrusts(object):
   hover = 0.50
-  takeoff = 0.57
+  takeoff = 0.6
   low_speed = 0.55
   med_speed = 0.65
   high_speed = 0.75
@@ -160,7 +160,7 @@ class Tower(object):
   def hover(self):
     self.vehicle_state = "HOVER"
     self.set_angle_thrust(Standard_Attitudes.level, Standard_Thrusts.hover)
-    self.vehicle.mode = dronekit.VehicleMode("STABILIZE")
+    self.vehicle.mode = dronekit.VehicleMode("ALT_HOLD")
 
   def kill_thrust(self, should_try_and_land=True):
     self.vehicle_state = "UNKNOWN"
@@ -172,10 +172,11 @@ class Tower(object):
 
     self.arm_drone()
     
-    self.set_angle_thrust(Standard_Attitudes.level, Standard_Thrusts.takeoff)
+    initial_alt = self.vehicle.location.global_relative_frame.alt
 
-    while(self.vehicle.location.global_relative_frame.alt <= target_altitude):
-      sleep(0.25)
+    while((self.vehicle.location.global_relative_frame.alt - initial_alt) <= target_altitude):
+      self.set_angle_thrust(Standard_Attitudes.level, Standard_Thrusts.takeoff)
+      sleep(0.1)
 
     self.hover()
     
@@ -198,7 +199,7 @@ class Tower(object):
 
   def land(self):
     self.vehicle.mode = dronekit.VehicleMode("LAND")
-    while(self.vehicle.location.global_relative_frame.alt <= self.LAND_ALTITUDE):
+    while((self.vehicle.location.global_relative_frame.alt) >= self.LAND_ALTITUDE):
       sleep(1)
     else:
       self.vehicle_state = "GROUND_IDLE"
