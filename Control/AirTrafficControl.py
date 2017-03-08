@@ -64,7 +64,7 @@ class Standard_Attitudes(object):
   
 class Standard_Thrusts(object):
   hover = 0.50
-  takeoff = 0.6
+  takeoff = 1
   low_speed = 0.55
   med_speed = 0.65
   high_speed = 0.75
@@ -74,7 +74,7 @@ class Tower(object):
   BAUD_RATE = 57600
   SIMULATOR = "127.0.0.1:14551"
   STANDARD_ATTITUDE_BIT_FLAGS = 0b00111111
-  TURNING_ATTITUDE_BIT_FLAGS = 0b00111111
+  TURNING_ATTITUDE_BIT_FLAGS = 0b00111000
   STANDARD_THRUST_CHANGE = 0.05
   MAX_TURN_TIME = 5
   LAND_ALTITUDE = 0.5
@@ -145,7 +145,7 @@ class Tower(object):
       0,                                 # System ID
       0,                                 # Component ID
       self.STANDARD_ATTITUDE_BIT_FLAGS,  # Bit flags. For more info, see http://mavlink.org/messages/common#SET_ATTITUDE_TARGET.
-      attitude.quaternion,               # Quaternions
+      attitude.quaternion,               # Attitude quaternion.
       0,                                 # Body roll rate.
       0,                                 # Body pitch rate.
       0,                                 # Body yaw rate.
@@ -157,10 +157,17 @@ class Tower(object):
     self.last_thrust = thrust
     print("Sent message.")
 
-  def hover(self):
+  def hover(self, duration=None):
     self.vehicle_state = "HOVER"
-    self.set_angle_thrust(Standard_Attitudes.level, Standard_Thrusts.hover)
-    self.vehicle.mode = dronekit.VehicleMode("ALT_HOLD")
+    if not duration:
+      while(True):
+        self.set_angle_thrust(Standard_Attitudes.level, Standard_Thrusts.hover)
+        sleep(1)
+    else:
+      while(duration > 0):
+        self.set_angle_thrust(Standard_Attitudes.level, Standard_Thrusts.hover)
+        duration-=1
+        sleep(1)
 
   def kill_thrust(self, should_try_and_land=True):
     self.vehicle_state = "UNKNOWN"
@@ -172,13 +179,12 @@ class Tower(object):
 
     self.arm_drone()
     
-    initial_alt = self.vehicle.location.global_relative_frame.alt
-
-    while((self.vehicle.location.global_relative_frame.alt - initial_alt) <= target_altitude):
+    for i in range(int(math.floor(target_altitude / self.MAX_CLIMB_SPEED))):
       self.set_angle_thrust(Standard_Attitudes.level, Standard_Thrusts.takeoff)
-      sleep(0.1)
+      sleep(1)
 
-    self.hover()
+    self.hover(10)
+    self.land()
     
     print('Reached target altitude:{0:.2f}m'.format(self.vehicle.location.global_relative_frame.alt))
 
