@@ -15,6 +15,7 @@ from time import sleep
 
 import dronekit
 import math
+import os
 import time
 
 class DroneAttitude():
@@ -56,6 +57,9 @@ class StandardAttitudes(object):
   forward = DroneAttitude(-5,0,0) # -5 degrees.
   backward = DroneAttitude(5,0,0)  # +5 degrees.
   turn = DroneAttitude(-3, 0, 0)
+  bob_right = DroneAttitude(0, 0, 4.25)
+  bob_left = DroneAttitude(0, 0, -3)
+
   
 class StandardThrusts(object):
   hover = 0.50
@@ -157,8 +161,15 @@ class Tower(object):
   def hover(self, duration=None):
     self.vehicle_state = "HOVER"
     if not duration:
+      counter = 0
       while(True):
-        self.set_angle_thrust(StandardAttitudes.level, StandardThrusts.hover)
+        if(counter % 2 == 0):
+          self.set_angle_thrust(StandardAttitudes.level, StandardThrusts.hover + 0.01)
+          self.set_angle_thrust(StandardAttitudes.bob_right, StandardThrusts.hover + 0.05)
+        else:
+          self.set_angle_thrust(StandardAttitudes.level, StandardThrusts.hover - 0.05)
+          self.set_angle_thrust(StandardAttitudes.bob_left, StandardThrusts.hover + 0.05)
+        counter+=1
         sleep(1)
     else:
       while(duration > 0):
@@ -172,11 +183,19 @@ class Tower(object):
     if(should_try_and_land):
       self.land()
 
+  def get_velocities(self):
+    while(True):
+      os.system('clear')
+      print("\n" + str(self.vehicle.velocity))
+      sleep(0.5)
+
   def takeoff(self, target_altitude):
 
     self.arm_drone()
+
+    initial_alt = self.vehicle.location.global_relative_frame.alt
     
-    for i in range(int(math.floor(target_altitude / self.MAX_CLIMB_RATE))):
+    while((self.vehicle.location.global_relative_frame.alt - initial_alt) < target_altitude):
       self.set_angle_thrust(StandardAttitudes.level, StandardThrusts.takeoff)
       sleep(1)
 
