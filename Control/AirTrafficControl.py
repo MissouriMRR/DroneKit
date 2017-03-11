@@ -17,20 +17,15 @@ import dronekit
 import math
 import time
 
-class Attitude(dronekit.Attitude):
+class DroneAttitude():
 
-  def __init__(self, pitch, yaw, roll, already_in_radians=False):
+  def __init__(self, pitch, yaw, roll):
     self.x = pitch
     self.y = yaw
     self.z = roll
-    if(not already_in_radians):
-      self.pitch = math.radians(pitch)
-      self.yaw = math.radians(yaw)
-      self.roll = math.radians(roll)
-    else:
-      self.pitch = pitch
-      self.yaw = yaw
-      self.roll = roll
+    self.pitch = math.radians(pitch)
+    self.yaw = math.radians(yaw)
+    self.roll = math.radians(roll)
     self.quaternion = self.get_quaternion()
 
   def get_quaternion(self):
@@ -56,33 +51,35 @@ class Attitude(dronekit.Attitude):
     return q
 
 
-class Standard_Attitudes(object):
-  level = Attitude(0,0,0)
-  forward = Attitude(-5,0,0) # -5 degrees.
-  backward = Attitude(5,0,0)  # +5 degrees.
-  turn = Attitude(-3, 0, 0)
+class StandardAttitudes(object):
+  level = DroneAttitude(0,0,0)
+  forward = DroneAttitude(-5,0,0) # -5 degrees.
+  backward = DroneAttitude(5,0,0)  # +5 degrees.
+  turn = DroneAttitude(-3, 0, 0)
   
-class Standard_Thrusts(object):
+class StandardThrusts(object):
   hover = 0.50
   takeoff = 1
   low_speed = 0.55
   med_speed = 0.65
   high_speed = 0.75
 
+
+
 class Tower(object):
   SERIAL_PORT = "/dev/ttyS1"
   BAUD_RATE = 57600
   SIMULATOR = "127.0.0.1:14551"
   STANDARD_ATTITUDE_BIT_FLAGS = 0b00111111
-  TURNING_ATTITUDE_BIT_FLAGS = 0b00111000
+  FLIP_ATTITUDE_BIT_FLAGS = 0b00111000
   STANDARD_THRUST_CHANGE = 0.05
   MAX_TURN_TIME = 5
+  MAX_CLIMB_RATE = 0.50
   LAND_ALTITUDE = 0.5
   TURN_START_VELOCITY = 3
   TURN_RADIUS = 0.5 # Meters
   ANGLE_INCREMENT = 1.1
   ANGLE_DECREMENT = 0.9
-  ZERO_ROTATION = Attitude(0, 0, 0)
 
   def __init__(self):
     self.start_time = 0
@@ -116,7 +113,7 @@ class Tower(object):
       self.connected = True
       self.vehicle_initialized = True
       self.start_time = time.time()
-      self.last_attitude = self.ZERO_ROTATION
+      self.last_attitude = StandardAttitudes.level
       print("\nSuccessfully connected to vehicle.")
 
   def arm_drone(self):
@@ -161,17 +158,17 @@ class Tower(object):
     self.vehicle_state = "HOVER"
     if not duration:
       while(True):
-        self.set_angle_thrust(Standard_Attitudes.level, Standard_Thrusts.hover)
+        self.set_angle_thrust(StandardAttitudes.level, StandardThrusts.hover)
         sleep(1)
     else:
       while(duration > 0):
-        self.set_angle_thrust(Standard_Attitudes.level, Standard_Thrusts.hover)
+        self.set_angle_thrust(StandardAttitudes.level, StandardThrusts.hover)
         duration-=1
         sleep(1)
 
   def kill_thrust(self, should_try_and_land=True):
     self.vehicle_state = "UNKNOWN"
-    self.set_angle_thrust(Standard_Attitudes.level, 0)
+    self.set_angle_thrust(StandardAttitudes.level, 0)
     if(should_try_and_land):
       self.land()
 
@@ -179,14 +176,13 @@ class Tower(object):
 
     self.arm_drone()
     
-    for i in range(int(math.floor(target_altitude / self.MAX_CLIMB_SPEED))):
-      self.set_angle_thrust(Standard_Attitudes.level, Standard_Thrusts.takeoff)
+    for i in range(int(math.floor(target_altitude / self.MAX_CLIMB_RATE))):
+      self.set_angle_thrust(StandardAttitudes.level, StandardThrusts.takeoff)
       sleep(1)
 
-    self.hover(10)
-    self.land()
-    
     print('Reached target altitude:{0:.2f}m'.format(self.vehicle.location.global_relative_frame.alt))
+
+    self.hover()
 
   def fly_for_time(self, duration, direction, target_velocity, thrust=None):
 
@@ -222,7 +218,7 @@ class Tower(object):
     duration = timedelta(seconds=duration)
     end_manuever = datetime.now() + duration
     
-    self.fly_for_time(1, Standard_Attitudes.forward, self.TURN_START_VELOCITY)
+    self.fly_for_time(1, StandardAttitudes.forward, self.TURN_START_VELOCITY)
     
     while(end_manuever <= datetime.now()):
       change_in_time = end_manuever - datetime.now()
@@ -231,18 +227,22 @@ class Tower(object):
       roll_angle = max_angle * (math.cos(self.vehicle.airspeed * change_in_time.seconds) / self.TURN_RADIUS)
       pitch_angle = max_angle * (math.sin(self.vehicle.airspeed * change_in_time.seconds) / self.TURN_RADIUS)
 
-      updated_attitude = Attitude(pitch_angle, self.last_attitude.yaw, roll_angle, True)
+      roll_angle = math.degrees(roll_angle)
+      pitch_angle = math.degrees(pitch_angle)
+      self.last_attitude.yaw = math.degrees(self.last_attitude.yaw)
+
+      updated_attitude = DroneAttitude(pitch_angle, self.last_attitude.yaw, roll_angle)
 
       message = self.vehicle.message_factory.set_attitude_target_encode(
         0,                                        # Timestamp in milliseconds since system boot (not used).
         0,                                        # System ID
         0,                                        # Component ID
-        self.TURNING_ATTITUDE_BIT_FLAGS,          # Bit flags. For more info, see http://mavlink.org/messages/common#SET_ATTITUDE_TARGET.
+        self.STANDARD_ATTITUDE_BIT_FLAGS,         # Bit flags. For more info, see http://mavlink.org/messages/common#SET_ATTITUDE_TARGET.
         updated_attitude.quaternion,              # Attitude quaternion.
         0,                                        # Body roll rate.
         0,                                        # Body pitch rate.
         0,                                        # Body yaw rate.
-        Standard_Thrusts.low_speed                # Collective thrust, from 0-1.
+        StandardThrusts.low_speed                # Collective thrust, from 0-1.
       )
 
       self.vehicle.send_mavlink(message)
@@ -257,6 +257,6 @@ class Tower(object):
     
       sleep(1)
       
-    self.fly_for_time(1, Standard_Attitudes.forward, self.vehicle.airspeed)
+    self.fly_for_time(1, StandardAttitudes.forward, self.vehicle.airspeed)
 
 
