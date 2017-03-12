@@ -10,6 +10,7 @@
 # pylint: disable=C, F, I, R, W
 
 from datetime import datetime, timedelta
+from 
 from os import system
 from time import sleep
 
@@ -17,6 +18,11 @@ import dronekit
 import math
 import os
 import time
+
+global DESIRED_ATTITUDE = StandardAttitudes.level
+global DESIRED_THRUST = StandardThrusts.none
+global LAST_ATTITUDE = StandardAttitudes.level
+global LAST_THRUST = StandardThrusts.none
 
 class DroneAttitude():
 
@@ -62,13 +68,19 @@ class StandardAttitudes(object):
 
   
 class StandardThrusts(object):
+  none = 0.00
   hover = 0.50
-  takeoff = 1
+  takeoff = 1.00
   low_speed = 0.55
   med_speed = 0.65
   high_speed = 0.75
 
-
+class VehicleStates(object):
+  hover = "HOVER"
+  flying = "FLYING"
+  unknown = "UNKNOWN"
+  avoidance = "AVOIDANCE"
+  landed = "LANDED"
 
 class Tower(object):
   SERIAL_PORT = "/dev/ttyS1"
@@ -99,7 +111,7 @@ class Tower(object):
     self.connected = False
 
     self.vehicle_busy = False
-    self.vehicle_state = "UNKNOWN"
+    self.vehicle_state = VehicleStates.unknown
 
   def enable_uart(self):
       print("\nEnabling serial UART connection on " + self.SERIAL_PORT + " at " + str(self.BAUD_RATE) + " baud...")
@@ -113,11 +125,11 @@ class Tower(object):
       self.vehicle = dronekit.connect(self.SERIAL_PORT, baud=self.BAUD_RATE, wait_ready=True)
       # self.vehicle = dronekit.connect(self.SIMULATOR, wait_ready=True)
       self.vehicle.mode = dronekit.VehicleMode("STABILIZE")
-      self.vehicle_state = "GROUND_IDLE"
+      self.vehicle_state = VehicleStates.landed
       self.connected = True
       self.vehicle_initialized = True
       self.start_time = time.time()
-      self.last_attitude = StandardAttitudes.level
+      self.
       print("\nSuccessfully connected to vehicle.")
 
   def arm_drone(self):
@@ -134,61 +146,6 @@ class Tower(object):
     uptime = time.time() - self.start_time
     return uptime
 
-  def set_angle_thrust(self, attitude, thrust):
-    
-    self.vehicle.mode = dronekit.VehicleMode("GUIDED_NOGPS")
-
-    while(self.vehicle.mode.name != "GUIDED_NOGPS"):
-      sleep(1)
-    
-    message = self.vehicle.message_factory.set_attitude_target_encode(
-      0,                                 # Timestamp in milliseconds since system boot (not used).
-      0,                                 # System ID
-      0,                                 # Component ID
-      self.STANDARD_ATTITUDE_BIT_FLAGS,  # Bit flags. For more info, see http://mavlink.org/messages/common#SET_ATTITUDE_TARGET.
-      attitude.quaternion,               # Attitude quaternion.
-      0,                                 # Body roll rate.
-      0,                                 # Body pitch rate.
-      0,                                 # Body yaw rate.
-      thrust                             # Collective thrust, from 0-1.
-    )
-    self.vehicle.send_mavlink(message)
-    self.vehicle.commands.upload()
-    self.last_attitude = attitude
-    self.last_thrust = thrust
-    print("Sent message.")
-
-  def hover(self, duration=None):
-    self.vehicle_state = "HOVER"
-    if not duration:
-      counter = 0
-      while(True):
-        if(counter % 2 == 0):
-          self.set_angle_thrust(StandardAttitudes.level, StandardThrusts.hover + 0.01)
-          self.set_angle_thrust(StandardAttitudes.bob_right, StandardThrusts.hover + 0.05)
-        else:
-          self.set_angle_thrust(StandardAttitudes.level, StandardThrusts.hover - 0.05)
-          self.set_angle_thrust(StandardAttitudes.bob_left, StandardThrusts.hover + 0.05)
-        counter+=1
-        sleep(1)
-    else:
-      while(duration > 0):
-        self.set_angle_thrust(StandardAttitudes.level, StandardThrusts.hover)
-        duration-=1
-        sleep(1)
-
-  def kill_thrust(self, should_try_and_land=True):
-    self.vehicle_state = "UNKNOWN"
-    self.set_angle_thrust(StandardAttitudes.level, 0)
-    if(should_try_and_land):
-      self.land()
-
-  def get_velocities(self):
-    while(True):
-      os.system('clear')
-      print("\n" + str(self.vehicle.velocity))
-      sleep(0.5)
-
   def takeoff(self, target_altitude):
 
     self.arm_drone()
@@ -196,7 +153,8 @@ class Tower(object):
     initial_alt = self.vehicle.location.global_relative_frame.alt
     
     while((self.vehicle.location.global_relative_frame.alt - initial_alt) < target_altitude):
-      self.set_angle_thrust(StandardAttitudes.level, StandardThrusts.takeoff)
+      DESIRED_ATTITUDE = StandardAttitudes.level
+      DESIRED_THRUST = StandardThrusts.takeoff
       sleep(1)
 
     print('Reached target altitude:{0:.2f}m'.format(self.vehicle.location.global_relative_frame.alt))
@@ -223,7 +181,7 @@ class Tower(object):
     while((self.vehicle.location.global_relative_frame.alt) >= self.LAND_ALTITUDE):
       sleep(1)
     else:
-      self.vehicle_state = "GROUND_IDLE"
+      self.vehicle_state = VehicleStates.landed
 
   def do_circle_turn(self, desired_angle, direction, duration):
     if(duration > self.MAX_TURN_TIME):
