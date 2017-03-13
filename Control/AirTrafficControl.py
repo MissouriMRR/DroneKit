@@ -21,7 +21,7 @@ import threading
 
 class DroneAttitude():
 
-  def __init__(self, pitch, yaw, roll):
+  def __init__(self, roll, pitch, yaw):
     self.pitch_deg = pitch
     self.yaw_deg = yaw
     self.roll_deg = roll
@@ -55,12 +55,10 @@ class DroneAttitude():
 
 class StandardAttitudes(object):
   level = DroneAttitude(0,0,0)
-  forward = DroneAttitude(-5,0,0) # -5 degrees.
-  backward = DroneAttitude(5,0,0)  # +5 degrees.
-  turn = DroneAttitude(-3, 0, 0)
-  bob_right = DroneAttitude(0, 0, 4.25)
-  bob_left = DroneAttitude(0, 0, -3)
-
+  forward = DroneAttitude(0,-5,0)
+  backward = DroneAttitude(0,-5,0)
+  left = DroneAttitude(-5, 0, 0)
+  right = DroneAttitude(5, 0, 0)
   
 class StandardThrusts(object):
   none = 0.00
@@ -288,7 +286,7 @@ class Tower(object):
       roll_angle = math.degrees(roll_angle)
       pitch_angle = math.degrees(pitch_angle)
 
-      updated_attitude = DroneAttitude(pitch_angle, LAST_ATTITUDE.yaw_deg, roll_angle)
+      updated_attitude = DroneAttitude(roll_angle, pitch_angle, LAST_ATTITUDE.yaw_deg)
 
       if(self.controller.busy):
         return
