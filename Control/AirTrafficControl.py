@@ -162,9 +162,10 @@ class Tower(object):
     return uptime
 
   def switch_control(func):
-    def check_governor_and_mode(self, *args, **kwargs):
+    def check_flight_controller_and_mode(self, *args, **kwargs):
         if not self.controller: 
-            pass
+          self.controller = FlightController(self)
+          self.controller.start()
         elif self.vehicle.mode.name != "GUIDED_NOGPS":
 
           self.vehicle.mode = dronekit.VehicleMode("GUIDED_NOGPS")
@@ -174,7 +175,7 @@ class Tower(object):
 
           return func(self, *args, **kwargs)
 
-    return check_governor_and_mode
+    return check_flight_controller_and_mode
 
   def send_angle_thrust(self, attitude, thrust):
     
