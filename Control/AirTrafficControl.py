@@ -121,9 +121,9 @@ class Tower(object):
 
   def initialize(self):
     if(not self.vehicle_initialized):
-      print("\nConnecting via " + self.SERIAL_PORT + " to flight controller...")
-      # self.vehicle = dronekit.connect(self.SERIAL_PORT, baud=self.BAUD_RATE, wait_ready=True)
-      self.vehicle = dronekit.connect(self.SIMULATOR, wait_ready=True)
+      print("\nConnecting via " + self.SERIAL_PORT + " to PixHawk...")
+      self.vehicle = dronekit.connect(self.SERIAL_PORT, baud=self.BAUD_RATE, wait_ready=True)
+      # self.vehicle = dronekit.connect(self.SIMULATOR, wait_ready=True)
 
       if not self.vehicle:
         print("\nUnable to connect to vehicle.")
@@ -175,54 +175,21 @@ class Tower(object):
 
     return check_flight_controller_and_mode
 
-  def send_angle_thrust(self, attitude, thrust):
-    
-    message = self.vehicle.message_factory.set_attitude_target_encode(
-    0,                                 # Timestamp in milliseconds since system boot (not used).
-    0,                                 # System ID
-    0,                                 # Component ID
-    self.STANDARD_ATTITUDE_BIT_FLAGS,  # Bit flags. For more info, see http://mavlink.org/messages/common#SET_ATTITUDE_TARGET.
-    attitude.quaternion,               # Attitude quaternion.
-    0,                                 # Body roll rate.
-    0,                                 # Body pitch rate.
-    0,                                 # Body yaw rate.
-    thrust                             # Collective thrust, from 0-1.
-    )
-
-    self.vehicle.send_mavlink(message)
-    self.vehicle.commands.upload()
-
-    LAST_ATTIUDE = attitude
-    LAST_THRUST = thrust
-    
-  def set_angle_thrust(self):
-    if self.vehicle.mode.name == "GUIDED_NOGPS":
-      
-      if self.vehicle_state == VehicleStates.hover: 
-        self.send_angle_thrust(StandardAttitudes.level, StandardThrusts.hover)
-      elif self.vehicle_state == VehicleStates.unknown:
-        self.send_angle_thrust(0, 0)
-      else:
-        self.send_angle_thrust(DESIRED_ATTITUDE, DESIRED_THRUST)
-
   @switch_control
   def takeoff(self, target_altitude):
+    
+    self.vehicle.state = VehicleStates.takeoff
 
     self.arm_drone()
-
-    self.vehicle.state = VehicleStates.takeoff
 
     initial_alt = self.vehicle.location.global_relative_frame.alt
     
     while((self.vehicle.location.global_relative_frame.alt - initial_alt) < target_altitude):
 
-      if(self.controller.busy):
-        return
-      else:
-        DESIRED_ATTITUDE = StandardAttitudes.level
-        DESIRED_THRUST = StandardThrusts.takeoff
+      DESIRED_ATTITUDE = StandardAttitudes.level
+      DESIRED_THRUST = StandardThrusts.takeoff
 
-      sleep(1)
+      sleep(0.1)
 
     print('Reached target altitude:{0:.2f}m'.format(self.vehicle.location.global_relative_frame.alt))
 
@@ -239,18 +206,15 @@ class Tower(object):
 
     while(end_manuever <= datetime.now()):
       
-      if(self.controller.busy):
-        return
+      if(self.vehicle.airspeed > target_velocity):
+        DESIRED_ATTITUDE = direction
+        DESIRED_THRUST -= self.STANDARD_THRUST_CHANGE
+      elif(self.vehicle.airspeed < target_velocity):
+        DESIRED_ATTITUDE = direction
+        DESIRED_THRUST -= self.STANDARD_THRUST_CHANGE
       else:
-        if(self.vehicle.airspeed > target_velocity):
-          DESIRED_ATTITUDE = direction
-          DESIRED_THRUST -= self.STANDARD_THRUST_CHANGE
-        elif(self.vehicle.airspeed < target_velocity):
-          DESIRED_ATTITUDE = direction
-          DESIRED_THRUST -= self.STANDARD_THRUST_CHANGE
-        else:
-          DESIRED_ATTITUDE = direction
-          DESIRED_THRUST = thrust
+        DESIRED_ATTITUDE = direction
+        DESIRED_THRUST = thrust
 
       sleep(1)
 
@@ -288,11 +252,8 @@ class Tower(object):
 
       updated_attitude = DroneAttitude(roll_angle, pitch_angle, LAST_ATTITUDE.yaw_deg)
 
-      if(self.controller.busy):
-        return
-      else:
-        DESIRED_ATTITUDE = updated_attitude
-        DESIRED_THRUST = StandardThrusts.low_speed
+      DESIRED_ATTITUDE = updated_attitude
+      DESIRED_THRUST = StandardThrusts.low_speed
 
       print("Sent message.")
 
@@ -311,7 +272,6 @@ class Tower(object):
   def check_battery_voltage(self):
     pass
 
-
 class FlightController(threading.Thread):
 
   def __init__(self, atc_instance):
@@ -322,14 +282,10 @@ class FlightController(threading.Thread):
 
   def run(self):
     while not self.stoprequest.isSet():
-      
       if self.atc.vehicle.armed:
-
         self.atc.check_sonar_sensors()
         self.atc.check_battery_voltage()
         self.atc.set_angle_thrust()
-
-      sleep(1)
 
   def join(self, timeout=None):
     if self.atc.vehicle.armed():
@@ -338,3 +294,34 @@ class FlightController(threading.Thread):
 
     self.stoprequest.set()
     super(FlightController, self).join(timeout)
+
+  def send_angle_thrust(self, attitude, thrust):
+    message = self.atc.vehicle.message_factory.set_attitude_target_encode(
+    0,                                 # Timestamp in milliseconds since system boot (not used).
+    0,                                 # System ID
+    0,                                 # Component ID
+    self.atc.STANDARD_ATTITUDE_BIT_FLAGS,  # Bit flags. For more info, see http://mavlink.org/messages/common#SET_ATTITUDE_TARGET.
+    attitude.quaternion,               # Attitude quaternion.
+    0,                                 # Body roll rate.
+    0,                                 # Body pitch rate.
+    0,                                 # Body yaw rate.
+    thrust                             # Collective thrust, from 0-1.
+    )
+
+    self.atc.vehicle.send_mavlink(message)
+    self.atc.vehicle.commands.upload()
+
+    LAST_ATTIUDE = attitude
+    LAST_THRUST = thrust
+
+    sleep(1)
+    
+  def set_angle_thrust(self):
+    if self.atc.vehicle.mode.name == "GUIDED_NOGPS" and self.atc.vehicle_state != VehicleStates.landed:
+      
+      if self.atc.vehicle_state == VehicleStates.hover: 
+        self.send_angle_thrust(StandardAttitudes.level, StandardThrusts.hover)
+      elif self.atc.vehicle_state == VehicleStates.unknown:
+        self.send_angle_thrust(StandardAttitudes.level, 0)
+      else:
+        self.send_angle_thrust(DESIRED_ATTITUDE, DESIRED_THRUST)
