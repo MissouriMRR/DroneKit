@@ -63,10 +63,7 @@ class StandardAttitudes(object):
 class StandardThrusts(object):
   none = 0.00
   hover = 0.50
-  takeoff = 1.00
-  low_speed = 0.55
-  med_speed = 0.65
-  high_speed = 0.75
+  full = 1.00
 
 class VehicleStates(object):
   hover = "HOVER"
@@ -85,11 +82,13 @@ class Tower(object):
   FLIP_ATTITUDE_BIT_FLAGS = 0b00111000
   STANDARD_THRUST_CHANGE = 0.05
   MAX_TURN_TIME = 5
+  MAX_NAV_SPEED = 1.0
   LAND_ALTITUDE = 0.5
   TURN_START_VELOCITY = 3
   TURN_RADIUS = 0.5 # Meters
   ANGLE_INCREMENT = 1.1
   ANGLE_DECREMENT = 0.9
+  MESSAGE_SLEEP_TIME = 2.5
 
   def __init__(self):
     self.start_time = 0
@@ -130,8 +129,10 @@ class Tower(object):
       self.STATE = VehicleStates.landed
       self.connected = True
       self.vehicle_initialized = True
-      self.controller = FlightController(self)
+      self.controller = MessageController(self)
+      self.failsafes = FailsafeController(self)
       self.controller.start()
+      self.failsafes.start()
       self.start_time = time.time()
       
       print("\nSuccessfully connected to vehicle.")
@@ -165,8 +166,11 @@ class Tower(object):
         if not self.vehicle_initialized:
           self.initialize()
         if not self.controller:
-          self.controller = FlightController(self)
+          self.controller = MessageController(self)
           self.controller.start()
+        if not self.failsafes():
+          self.failsafes = FailsafeController(self)
+          self.failsafes.start()
         if self.vehicle.mode.name != "GUIDED_NOGPS":
           self.vehicle.mode = dronekit.VehicleMode("GUIDED_NOGPS")
           while(self.vehicle.mode.name != "GUIDED_NOGPS"):
@@ -188,7 +192,7 @@ class Tower(object):
     while((self.vehicle.location.global_relative_frame.alt - initial_alt) < target_altitude):
 
       self.DESIRED_ATTITUDE = StandardAttitudes.level
-      self.DESIRED_THRUST = StandardThrusts.takeoff
+      self.DESIRED_THRUST = StandardThrusts.full
 
       sleep(0.1)
 
@@ -197,28 +201,26 @@ class Tower(object):
     self.STATE = VehicleStates.hover
 
   @switch_control
-  def fly_for_time(self, duration, direction, target_velocity, thrust=None):
-
-    if(not thrust):
-      thrust = StandardThrusts.low_speed
+  def fly_for_time(self, duration, direction, target_velocity):
 
     end_manuever = datetime.now() + timedelta(seconds=duration)
 
     self.STATE = VehicleStates.flying
 
     self.DESIRED_ATTITUDE = direction
-    self.DESIRED_THRUST = thrust
+    self.DESIRED_THRUST = StandardThrusts.full
 
     while(datetime.now() < end_manuever):
 
-      self.DESIRED_ATTITUDE = direction
-
       if(self.vehicle.airspeed > target_velocity):
-        self.DESIRED_THRUST -= self.STANDARD_THRUST_CHANGE
+        self.DESIRED_ATTITUDE.pitch_deg -= 1
       elif(self.vehicle.airspeed < target_velocity):
-        self.DESIRED_THRUST += self.STANDARD_THRUST_CHANGE
+        self.DESIRED_ATTITUDE.pitch_deg += 1
       else:
-        self.DESIRED_THRUST = thrust
+        self.DESIRED_ATTITUDE.pitch_deg = direction.pitch_deg
+
+      self.DESIRED_ATTITUDE.pitch = math.radians(self.DESIRED_ATTITUDE.pitch_deg)
+      self.DESIRED_ATTITUDE.quaternion = self.DESIRED_ATTITUDE.get_quaternion()
 
       sleep(1)
     
@@ -258,7 +260,7 @@ class Tower(object):
       updated_attitude = DroneAttitude(roll_angle, pitch_angle, self.LAST_ATTITUDE.yaw_deg)
 
       self.DESIRED_ATTITUDE = updated_attitude
-      self.DESIRED_THRUST = StandardThrusts.low_speed
+      self.DESIRED_THRUST = StandardThrusts.full
 
       print("Sent message.")
 
@@ -277,20 +279,18 @@ class Tower(object):
   def check_battery_voltage(self):
     pass
 
-class FlightController(threading.Thread):
+class FailsafeController(threading.Thread):
 
   def __init__(self, atc_instance):
     self.atc = atc_instance
-    self.busy = False
     self.stoprequest = threading.Event()
-    super(FlightController, self).__init__()
+    super(FailsafeController, self).__init__()
 
   def run(self):
     while not self.stoprequest.isSet():
-      if self.atc.vehicle.armed:
+      if self.atc.vehicle.armed and self.atc.STATE != VehicleStates.landed:
         self.atc.check_sonar_sensors()
         self.atc.check_battery_voltage()
-        self.set_angle_thrust()
 
   def join(self, timeout=None):
     if self.atc.vehicle.armed:
@@ -298,7 +298,23 @@ class FlightController(threading.Thread):
         self.atc.land()
 
     self.stoprequest.set()
-    super(FlightController, self).join(timeout)
+    super(FailsafeController, self).join(timeout)
+
+class MessageController(threading.Thread):
+
+  def __init__(self, atc_instance):
+    self.atc = atc_instance
+    self.stoprequest = threading.Event()
+    super(MessageController, self).__init__()
+
+  def run(self):
+    while not self.stoprequest.isSet():
+      if self.atc.vehicle.armed and self.atc.STATE != VehicleStates.landed:
+        self.set_angle_thrust()
+
+  def join(self, timeout=None):
+    self.stoprequest.set()
+    super(MessageController, self).join(timeout)
 
   def send_angle_thrust(self, attitude, thrust):
     message = self.atc.vehicle.message_factory.set_attitude_target_encode(
@@ -319,11 +335,12 @@ class FlightController(threading.Thread):
     self.atc.LAST_ATTIUDE = attitude
     self.atc.LAST_THRUST = thrust
 
-    sleep(1)
+    sleep(self.atc.MESSAGE_SLEEP_TIME)
     
   def set_angle_thrust(self):
-    if self.atc.vehicle.mode.name == "GUIDED_NOGPS" and self.atc.STATE != VehicleStates.landed and self.atc.STATE != VehicleStates.avoidance:
 
+    if self.atc.vehicle.mode.name == "GUIDED_NOGPS":
+      
       if self.atc.STATE == VehicleStates.hover: 
         self.send_angle_thrust(StandardAttitudes.level, StandardThrusts.hover)
       elif self.atc.STATE == VehicleStates.unknown:
