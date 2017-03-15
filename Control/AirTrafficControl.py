@@ -85,7 +85,6 @@ class Tower(object):
   FLIP_ATTITUDE_BIT_FLAGS = 0b00111000
   STANDARD_THRUST_CHANGE = 0.05
   MAX_TURN_TIME = 5
-  MAX_CLIMB_RATE = 0.50
   LAND_ALTITUDE = 0.5
   TURN_START_VELOCITY = 3
   TURN_RADIUS = 0.5 # Meters
@@ -157,6 +156,9 @@ class Tower(object):
   def get_uptime(self):
     uptime = time.time() - self.start_time
     return uptime
+
+  def constrain(self, x, in_min, in_max, out_min, out_max):
+    return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min
 
   def switch_control(func):
     def check_flight_controller_and_mode(self, *args, **kwargs):
@@ -317,7 +319,7 @@ class FlightController(threading.Thread):
     sleep(1)
     
   def set_angle_thrust(self):
-    if self.atc.vehicle.mode.name == "GUIDED_NOGPS" and self.atc.STATE != VehicleStates.landed:
+    if self.atc.vehicle.mode.name == "GUIDED_NOGPS" and self.atc.STATE != VehicleStates.landed and self.atc.STATE != VehicleStates.avoidance:
 
       if self.atc.STATE == VehicleStates.hover: 
         self.send_angle_thrust(StandardAttitudes.level, StandardThrusts.hover)
