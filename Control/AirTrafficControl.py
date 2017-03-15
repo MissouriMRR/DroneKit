@@ -162,14 +162,17 @@ class Tower(object):
 
   def switch_control(func):
     def check_flight_controller_and_mode(self, *args, **kwargs):
-        if not self.vehicle_initialized or not self.controller:
+        if not self.vehicle_initialized:
           self.initialize()
-        elif self.vehicle.mode.name != "GUIDED_NOGPS":
+        if not self.controller:
+          self.controller = FlightController(self)
+          self.controller.start()
+        if self.vehicle.mode.name != "GUIDED_NOGPS":
           self.vehicle.mode = dronekit.VehicleMode("GUIDED_NOGPS")
           while(self.vehicle.mode.name != "GUIDED_NOGPS"):
             sleep(1)
 
-          return func(self, *args, **kwargs)
+        return func(self, *args, **kwargs)
 
     return check_flight_controller_and_mode
 
