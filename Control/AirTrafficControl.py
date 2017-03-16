@@ -63,6 +63,7 @@ class StandardAttitudes(object):
 class StandardThrusts(object):
   none = 0.00
   hover = 0.50
+  takeoff = 0.57
   full = 1.00
 
 class VehicleStates(object):
@@ -88,7 +89,7 @@ class Tower(object):
   TURN_RADIUS = 0.5 # Meters
   ANGLE_INCREMENT = 1.1
   ANGLE_DECREMENT = 0.9
-  MESSAGE_SLEEP_TIME = 2.5
+  MESSAGE_SLEEP_TIME = 1.0
 
   def __init__(self):
     self.start_time = 0
@@ -168,7 +169,7 @@ class Tower(object):
         if not self.controller:
           self.controller = MessageController(self)
           self.controller.start()
-        if not self.failsafes():
+        if not self.failsafes:
           self.failsafes = FailsafeController(self)
           self.failsafes.start()
         if self.vehicle.mode.name != "GUIDED_NOGPS":
@@ -192,7 +193,7 @@ class Tower(object):
     while((self.vehicle.location.global_relative_frame.alt - initial_alt) < target_altitude):
 
       self.DESIRED_ATTITUDE = StandardAttitudes.level
-      self.DESIRED_THRUST = StandardThrusts.full
+      self.DESIRED_THRUST = StandardThrusts.takeoff
 
       sleep(0.1)
 
@@ -213,14 +214,11 @@ class Tower(object):
     while(datetime.now() < end_manuever):
 
       if(self.vehicle.airspeed > target_velocity):
-        self.DESIRED_ATTITUDE.pitch_deg -= 1
+        self.DESIRED_ATTITUDE = DroneAttitude(self.DESIRED_ATTITUDE.roll_deg, self.DESIRED_ATTITUDE.pitch_deg + 1, self.DESIRED_ATTITUDE.yaw_deg)
       elif(self.vehicle.airspeed < target_velocity):
-        self.DESIRED_ATTITUDE.pitch_deg += 1
+        self.DESIRED_ATTITUDE = DroneAttitude(self.DESIRED_ATTITUDE.roll_deg, self.DESIRED_ATTITUDE.pitch_deg - 1, self.DESIRED_ATTITUDE.yaw_deg)
       else:
-        self.DESIRED_ATTITUDE.pitch_deg = direction.pitch_deg
-
-      self.DESIRED_ATTITUDE.pitch = math.radians(self.DESIRED_ATTITUDE.pitch_deg)
-      self.DESIRED_ATTITUDE.quaternion = self.DESIRED_ATTITUDE.get_quaternion()
+        self.DESIRED_ATTITUDE = direction
 
       sleep(1)
     
