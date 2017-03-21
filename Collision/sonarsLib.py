@@ -1,8 +1,8 @@
+#Innocent Niyibizi
 from hcsr04sensor import sensor
 import time
-# Created by Al Audet
-# MIT License
 
+#user created sonar class for easier mapping
 class Sonar:
 
     def __init__(self, trigger, echo):
