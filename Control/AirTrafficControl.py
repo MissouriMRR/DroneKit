@@ -209,14 +209,15 @@ class Tower(object):
       corrected_distance = 0
 
       while(self.STATE != VehicleStates.avoidance and (math.fabs(corrected_distance - drift_distance) > -self.DRIFT_CORRECT_THRESHOLD and math.fabs(corrected_distance - drift_distance) < self.DRIFT_CORRECT_THRESHOLD)):
-        corrected_distance_x = self.vehicle.velocity[0] * 1.0
-        corrected_distance_y = self.vehicle.velocity[1] * 1.0
+        corrected_distance_x = self.vehicle.velocity[0]
+        corrected_distance_y = self.vehicle.velocity[1]
         corrected_distance += math.sqrt( math.pow((corrected_distance_x - 0), 2) * math.pow((corrected_distance_y - 0), 2) )
 
         self.DESIRED_ATTITUDE = adjust_atittude
         self.DESIRED_THRUST = deepcopy(StandardThrusts.hover)
         self.controller.send_angle_thrust(self.DESIRED_ATTITUDE, self.DESIRED_THRUST)
         print("\n Correcting: " + corrected_distance + " Drifted " + drift_distance)
+        sleep(1)
 
     self.DESIRED_ATTITUDE = deepcopy(StandardAttitudes.level)
     self.DESIRED_THRUST = deepcopy(StandardThrusts.hover)
