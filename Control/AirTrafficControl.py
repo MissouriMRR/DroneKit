@@ -190,19 +190,19 @@ class Tower(object):
     drift_distance_x = self.vehicle.velocity[0] * self.HOVER_MAX_DRIFT_TIME
     drift_distance_y = self.vehicle.velocity[1] * self.HOVER_MAX_DRIFT_TIME
 
-    drift_distance = math.sqrt( math.pow((drift_distance_x - 0), 2) * math.pow((drift_distance_y - 0), 2) )
+    drift_distance = math.hypot(drift_distance_x, drift_distance_y)
 
     if(drift_distance > self.HOVER_CIRCLE_RADIUS):
-      adjust_atittude = deepcopy(StandardAttitudes.level)
+      adjust_attitude = deepcopy(StandardAttitudes.level)
 
       if(drift_distance_x < 0):
-        adjust_atittude = DroneAttitude(self.HOVER_ADJUST_DEG, adjust_atittude.pitch_deg, adjust_atittude.yaw_deg)
+        adjust_attitude = DroneAttitude(self.HOVER_ADJUST_DEG, adjust_attitude.pitch_deg, adjust_attitude.yaw_deg)
       elif(drift_distance_x > 0):
-        adjust_atittude = DroneAttitude(-self.HOVER_ADJUST_DEG, adjust_atittude.pitch_deg, adjust_atittude.yaw_deg)
+        adjust_attitude = DroneAttitude(-self.HOVER_ADJUST_DEG, adjust_attitude.pitch_deg, adjust_attitude.yaw_deg)
       if(drift_distance_y < 0):
-        adjust_atittude = DroneAttitude(adjust_atittude.roll_deg, -self.HOVER_ADJUST_DEG, adjust_atittude.yaw_deg)
+        adjust_attitude = DroneAttitude(adjust_attitude.roll_deg, -self.HOVER_ADJUST_DEG, adjust_attitude.yaw_deg)
       elif(drift_distance_y > 0):
-        adjust_atittude = DroneAttitude(adjust_atittude.roll_deg, self.HOVER_ADJUST_DEG, adjust_atittude.yaw_deg)
+        adjust_attitude = DroneAttitude(adjust_attitude.roll_deg, self.HOVER_ADJUST_DEG, adjust_attitude.yaw_deg)
       
       corrected_distance_x = 0
       corrected_distance_y = 0
@@ -211,9 +211,9 @@ class Tower(object):
       while(self.STATE != VehicleStates.avoidance and (math.fabs(corrected_distance - drift_distance) > -self.DRIFT_CORRECT_THRESHOLD and math.fabs(corrected_distance - drift_distance) < self.DRIFT_CORRECT_THRESHOLD)):
         corrected_distance_x = self.vehicle.velocity[0]
         corrected_distance_y = self.vehicle.velocity[1]
-        corrected_distance += math.sqrt( math.pow((corrected_distance_x - 0), 2) * math.pow((corrected_distance_y - 0), 2) )
+        corrected_distance += math.hypot(corrected_distance_x, corrected_distance_y)
 
-        self.DESIRED_ATTITUDE = adjust_atittude
+        self.DESIRED_ATTITUDE = adjust_attitude
         self.DESIRED_THRUST = deepcopy(StandardThrusts.hover)
         self.controller.send_angle_thrust(self.DESIRED_ATTITUDE, self.DESIRED_THRUST)
         print("\n Correcting: " + corrected_distance + " Drifted " + drift_distance)
