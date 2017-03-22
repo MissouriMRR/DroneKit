@@ -12,6 +12,7 @@
 from datetime import datetime, timedelta
 from os import system
 from time import sleep
+from copy import deepcopy
 
 import dronekit
 import math
@@ -63,7 +64,7 @@ class StandardAttitudes(object):
 class StandardThrusts(object):
   none = 0.00
   hover = 0.50
-  takeoff = 0.57
+  takeoff = 0.65
   full = 1.00
 
 class VehicleStates(object):
@@ -83,13 +84,15 @@ class Tower(object):
   FLIP_ATTITUDE_BIT_FLAGS = 0b00111000
   STANDARD_THRUST_CHANGE = 0.05
   MAX_TURN_TIME = 5
-  MAX_NAV_SPEED = 1.0
   LAND_ALTITUDE = 0.5
   TURN_START_VELOCITY = 3
   TURN_RADIUS = 0.5 # Meters
   ANGLE_INCREMENT = 1.1
   ANGLE_DECREMENT = 0.9
-  MESSAGE_SLEEP_TIME = 1.0
+  MESSAGE_SLEEP_TIME = 1
+  HOVER_CIRCLE_RADIUS = 0.25
+  HOVER_ADJUST_DEG = 3
+  HOVER_MAX_DRIFT_TIME = 2.5
 
   def __init__(self):
     self.start_time = 0
@@ -101,8 +104,6 @@ class Tower(object):
 
     self.vehicle = None
     self.connected = False
-
-    self.vehicle_busy = False
 
     self.DESIRED_ATTITUDE = StandardAttitudes.level
     self.LAST_ATTITUDE = StandardAttitudes.level
@@ -182,6 +183,46 @@ class Tower(object):
     return check_flight_controller_and_mode
 
   @switch_control
+  def hover(self):
+    sleep(self.HOVER_MAX_DRIFT_TIME)
+
+    drift_distance_x = self.vehicle.velocity[0] * self.HOVER_MAX_DRIFT_TIME
+    drift_distance_y = self.vehicle.velocity[1] * self.HOVER_MAX_DRIFT_TIME
+
+    drift_distance = math.sqrt( math.pow((drift_distance_x - 0), 2) * math.pow((drift_distance_y - 0), 2) )
+
+    if(drift_distance > self.HOVER_CIRCLE_RADIUS):
+      adjust_atittude = deepcopy(StandardAttitudes.level)
+
+      if(drift_distance_x < 0):
+        adjust_atittude = DroneAttitude(self.HOVER_ADJUST_DEG, adjust_atittude.pitch_deg, adjust_atittude.yaw_deg)
+      elif(drift_distance_x > 0):
+        adjust_atittude = DroneAttitude(-self.HOVER_ADJUST_DEG, adjust_atittude.pitch_deg, adjust_atittude.yaw_deg)
+      if(drift_distance_y < 0):
+        adjust_atittude = DroneAttitude(adjust_atittude.roll_deg, -self.HOVER_ADJUST_DEG, adjust_atittude.yaw_deg)
+      elif(drift_distance_y > 0):
+        adjust_atittude = DroneAttitude(adjust_atittude.roll_deg, self.HOVER_ADJUST_DEG, adjust_atittude.yaw_deg)
+      
+      corrected_distance_x = 0
+      corrected_distance_y = 0
+      corrected_distance = 0
+
+      while(self.STATE != VehicleStates.avoidance and (math.fabs(corrected_distance - drift_distance) > -0.05 and math.fabs(corrected_distance - drift_distance) > 0)):
+        corrected_distance_x = self.vehicle.velocity[0] * 1.0
+        corrected_distance_y = self.vehicle.velocity[1] * 1.0
+        corrected_distance += math.sqrt( math.pow((corrected_distance_x - 0), 2) * math.pow((corrected_distance_y - 0), 2) )
+
+        self.DESIRED_ATTITUDE = adjust_atittude
+        self.DESIRED_THRUST = deepcopy(StandardThrusts.hover)
+        self.controller.send_angle_thrust(self.DESIRED_ATTITUDE, self.DESIRED_THRUST)
+        print("\n Correcting: " + corrected_distance + " Drifted " + drift_distance)
+
+    self.DESIRED_ATTITUDE = deepcopy(StandardAttitudes.level)
+    self.DESIRED_THRUST = deepcopy(StandardThrusts.hover)
+
+    self.controller.send_angle_thrust(self.DESIRED_ATTITUDE, self.DESIRED_THRUST)
+
+  @switch_control
   def takeoff(self, target_altitude):
     
     self.STATE = VehicleStates.takeoff
@@ -192,8 +233,8 @@ class Tower(object):
     
     while((self.vehicle.location.global_relative_frame.alt - initial_alt) < target_altitude):
 
-      self.DESIRED_ATTITUDE = StandardAttitudes.level
-      self.DESIRED_THRUST = StandardThrusts.takeoff
+      self.DESIRED_ATTITUDE = deepcopy(StandardAttitudes.level)
+      self.DESIRED_THRUST = deepcopy(StandardThrusts.takeoff)
 
       sleep(0.1)
 
@@ -208,17 +249,31 @@ class Tower(object):
 
     self.STATE = VehicleStates.flying
 
-    self.DESIRED_ATTITUDE = direction
-    self.DESIRED_THRUST = StandardThrusts.full
+    self.DESIRED_ATTITUDE = deepcopy(direction)
+    self.DESIRED_THRUST = deepcopy(StandardThrusts.full)
+
+    print("\n DESIRED_AT_START " + str(self.DESIRED_ATTITUDE.pitch_deg))
 
     while(datetime.now() < end_manuever):
 
-      if(self.vehicle.airspeed > target_velocity):
-        self.DESIRED_ATTITUDE = DroneAttitude(self.DESIRED_ATTITUDE.roll_deg, self.DESIRED_ATTITUDE.pitch_deg + 1, self.DESIRED_ATTITUDE.yaw_deg)
-      elif(self.vehicle.airspeed < target_velocity):
-        self.DESIRED_ATTITUDE = DroneAttitude(self.DESIRED_ATTITUDE.roll_deg, self.DESIRED_ATTITUDE.pitch_deg - 1, self.DESIRED_ATTITUDE.yaw_deg)
+      print(self.vehicle.airspeed,)
+      print(self.vehicle.velocity,)
+
+      updated_attitude = deepcopy(self.DESIRED_ATTITUDE)
+
+      if(self.vehicle.airspeed < target_velocity):
+        updated_attitude.pitch_deg -= 1
+      elif(self.vehicle.airspeed > target_velocity):
+        updated_attitude.pitch_deg += 1
       else:
-        self.DESIRED_ATTITUDE = direction
+        updated_attitude.pitch_deg = direction.pitch_deg
+
+      updated_attitude.pitch = math.radians(self.DESIRED_ATTITUDE.pitch_deg)
+      updated_attitude.quaternion = self.DESIRED_ATTITUDE.get_quaternion()
+
+      self.DESIRED_ATTITUDE = updated_attitude
+
+      print(self.DESIRED_ATTITUDE.pitch_deg,)
 
       sleep(1)
     
@@ -258,7 +313,7 @@ class Tower(object):
       updated_attitude = DroneAttitude(roll_angle, pitch_angle, self.LAST_ATTITUDE.yaw_deg)
 
       self.DESIRED_ATTITUDE = updated_attitude
-      self.DESIRED_THRUST = StandardThrusts.full
+      self.DESIRED_THRUST = deepcopy(StandardThrusts.full)
 
       print("Sent message.")
 
@@ -340,6 +395,7 @@ class MessageController(threading.Thread):
     if self.atc.vehicle.mode.name == "GUIDED_NOGPS":
       
       if self.atc.STATE == VehicleStates.hover: 
+        # self.atc.hover()
         self.send_angle_thrust(StandardAttitudes.level, StandardThrusts.hover)
       elif self.atc.STATE == VehicleStates.unknown:
         self.send_angle_thrust(StandardAttitudes.level, 0)
