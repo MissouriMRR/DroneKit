@@ -1,4 +1,14 @@
-#Innocent Niyibizi
+############################################
+# This file contains an interface for
+# accessing Sonar sensors on GPIO pins and
+# determining distance ot objects.
+############################################
+# Multi-Rotor Robot Design Team
+# Missouri University of Science Technology
+# Spring 2017
+# Innocent Niyibizi
+# pylint: disable=C, F, I, R, W
+
 from hcsr04sensor import sensor
 import time
 
