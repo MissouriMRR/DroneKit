@@ -93,6 +93,7 @@ class Tower(object):
   HOVER_CIRCLE_RADIUS = 0.25
   HOVER_ADJUST_DEG = 3
   HOVER_MAX_DRIFT_TIME = 2.5
+  DRIFT_CORRECT_THRESHOLD = 0.05
 
   def __init__(self):
     self.start_time = 0
@@ -207,7 +208,7 @@ class Tower(object):
       corrected_distance_y = 0
       corrected_distance = 0
 
-      while(self.STATE != VehicleStates.avoidance and (math.fabs(corrected_distance - drift_distance) > -0.05 and math.fabs(corrected_distance - drift_distance) > 0)):
+      while(self.STATE != VehicleStates.avoidance and (math.fabs(corrected_distance - drift_distance) > -self.DRIFT_CORRECT_THRESHOLD and math.fabs(corrected_distance - drift_distance) < self.DRIFT_CORRECT_THRESHOLD)):
         corrected_distance_x = self.vehicle.velocity[0] * 1.0
         corrected_distance_y = self.vehicle.velocity[1] * 1.0
         corrected_distance += math.sqrt( math.pow((corrected_distance_x - 0), 2) * math.pow((corrected_distance_y - 0), 2) )
