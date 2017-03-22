@@ -1,5 +1,14 @@
-#Innocent Niyibizi
-#Libraries
+############################################
+# This file contains an interface for
+# accessing Sonar sensors on GPIO pins and
+# determining distance ot objects.
+############################################
+# Multi-Rotor Robot Design Team
+# Missouri University of Science Technology
+# Spring 2017
+# Innocent Niyibizi
+# pylint: disable=C, F, I, R, W
+
 import RPi.GPIO as GPIO
 import time
 
