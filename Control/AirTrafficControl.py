@@ -79,7 +79,7 @@ class Tower(object):
   SERIAL_PORT = "/dev/ttyS1"
   BAUD_RATE = 57600
   SIMULATOR = "127.0.0.1:14551"
-  USB = "/dev/cu.usbmodem1"
+  USB = "/dev/ttyUSB0"
   STANDARD_ATTITUDE_BIT_FLAGS = 0b00111111
   FLIP_ATTITUDE_BIT_FLAGS = 0b00111000
   STANDARD_THRUST_CHANGE = 0.05
@@ -99,10 +99,6 @@ class Tower(object):
     self.start_time = 0
     self.vehicle_initialized = False
 
-    self.vision_running = False
-    self.avoidance_running = False
-    self.stategy_running = False
-
     self.vehicle = None
 
     self.DESIRED_ATTITUDE = StandardAttitudes.level
@@ -120,8 +116,8 @@ class Tower(object):
   def initialize(self):
     if(not self.vehicle_initialized):
       print("\nConnecting via " + self.SERIAL_PORT + " to PixHawk...")
-      # self.vehicle = dronekit.connect(self.SERIAL_PORT, baud=self.BAUD_RATE, wait_ready=True)
-      self.vehicle = dronekit.connect(self.SIMULATOR, wait_ready=True)
+      self.vehicle = dronekit.connect(self.SERIAL_PORT, baud=self.BAUD_RATE, wait_ready=True)
+      # self.vehicle = dronekit.connect(self.USB, wait_ready=True)
 
       if not self.vehicle:
         print("\nUnable to connect to vehicle.")
