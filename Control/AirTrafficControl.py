@@ -104,7 +104,6 @@ class Tower(object):
     self.stategy_running = False
 
     self.vehicle = None
-    self.connected = False
 
     self.DESIRED_ATTITUDE = StandardAttitudes.level
     self.LAST_ATTITUDE = StandardAttitudes.level
@@ -130,7 +129,6 @@ class Tower(object):
 
       self.vehicle.mode = dronekit.VehicleMode("STABILIZE")
       self.STATE = VehicleStates.landed
-      self.connected = True
       self.vehicle_initialized = True
       self.controller = MessageController(self)
       self.failsafes = FailsafeController(self)
@@ -142,8 +140,8 @@ class Tower(object):
 
   def shutdown(self):    
     self.controller.join()
+    self.failsafes.join()
     self.vehicle.close()
-    self.connected = False
     self.vehicle_initialized = False
     self.start_time = 0
 
@@ -397,8 +395,7 @@ class MessageController(threading.Thread):
     if self.atc.vehicle.mode.name == "GUIDED_NOGPS":
       
       if self.atc.STATE == VehicleStates.hover: 
-        # self.atc.hover()
-        self.send_angle_thrust(StandardAttitudes.level, StandardThrusts.hover)
+        self.atc.hover()
       elif self.atc.STATE == VehicleStates.unknown:
         self.send_angle_thrust(StandardAttitudes.level, 0)
       else:
