@@ -13,7 +13,9 @@ from datetime import datetime, timedelta
 from os import system
 from time import sleep
 from copy import deepcopy
+from Collision import Sonar
 
+import RPi.GPIO as GPIO
 import dronekit
 import math
 import os
@@ -60,7 +62,7 @@ class StandardAttitudes(object):
   backward = DroneAttitude(0,-5,0)
   left = DroneAttitude(-5, 0, 0)
   right = DroneAttitude(5, 0, 0)
-  
+
 class StandardThrusts(object):
   none = 0.00
   hover = 0.50
@@ -137,10 +139,10 @@ class Tower(object):
       self.controller.start()
       self.failsafes.start()
       self.start_time = time.time()
-      
+
       print("\nSuccessfully connected to vehicle.")
 
-  def shutdown(self):    
+  def shutdown(self):
     self.controller.join()
     self.vehicle.close()
     self.connected = False
@@ -151,7 +153,7 @@ class Tower(object):
     self.vehicle.armed = True
     while(not self.vehicle.armed):
       sleep(1)
-  
+
   def disarm_drone(self):
     self.vehicle.armed = False
     while(self.vehicle.armed):
@@ -203,7 +205,7 @@ class Tower(object):
         adjust_attitude = DroneAttitude(adjust_attitude.roll_deg, -self.HOVER_ADJUST_DEG, adjust_attitude.yaw_deg)
       elif(drift_distance_y > 0):
         adjust_attitude = DroneAttitude(adjust_attitude.roll_deg, self.HOVER_ADJUST_DEG, adjust_attitude.yaw_deg)
-      
+
       corrected_distance_x = 0
       corrected_distance_y = 0
       corrected_distance = 0
@@ -226,13 +228,13 @@ class Tower(object):
 
   @switch_control
   def takeoff(self, target_altitude):
-    
+
     self.STATE = VehicleStates.takeoff
 
     self.arm_drone()
 
     initial_alt = self.vehicle.location.global_relative_frame.alt
-    
+
     while((self.vehicle.location.global_relative_frame.alt - initial_alt) < target_altitude):
 
       self.DESIRED_ATTITUDE = deepcopy(StandardAttitudes.level)
@@ -278,7 +280,7 @@ class Tower(object):
       print(self.DESIRED_ATTITUDE.pitch_deg,)
 
       sleep(1)
-    
+
     self.STATE = VehicleStates.hover
 
   def land(self):
@@ -287,21 +289,21 @@ class Tower(object):
       sleep(1)
     else:
       self.STATE = VehicleStates.landed
-  
+
   @switch_control
   def do_circle_turn(self, desired_angle, direction, duration):
     if(duration > self.MAX_TURN_TIME):
       return
 
     desired_angle = math.radians(desired_angle)
-      
+
     max_angle = desired_angle
     altitude_to_hold = self.vehicle.location.global_relative_frame.alt
 
     end_manuever = datetime.now() + timedelta(seconds=duration)
-    
+
     self.fly_for_time(1, StandardAttitudes.forward, self.TURN_START_VELOCITY)
-    
+
     while(datetime.now() < end_manuever):
       change_in_time = end_manuever - datetime.now()
       current_altitude = self.vehicle.location.global_relative_frame.alt
@@ -323,14 +325,16 @@ class Tower(object):
         max_angle = desired_angle * self.ANGLE_INCREMENT
       elif(current_altitude < altitude_to_hold):
         max_angle = desired_angle * self.ANGLE_DECREMENT
-    
+
       sleep(1)
-      
+
     self.fly_for_time(1, StandardAttitudes.forward, self.vehicle.airspeed)
-    
+
   def check_sonar_sensors(self):
+    sonar = Sonar.Sonar(2,3, "Main")
+    print("%s Measured Distance = %.1f cm" % (sonar.getName(), sonar.getDistance()))
     pass
-  
+
   def check_battery_voltage(self):
     pass
 
@@ -353,6 +357,7 @@ class FailsafeController(threading.Thread):
         self.atc.land()
 
     self.stoprequest.set()
+    GPIO.cleanup()
     super(FailsafeController, self).join(timeout)
 
 class MessageController(threading.Thread):
@@ -391,12 +396,12 @@ class MessageController(threading.Thread):
     self.atc.LAST_THRUST = thrust
 
     sleep(self.atc.MESSAGE_SLEEP_TIME)
-    
+
   def set_angle_thrust(self):
 
     if self.atc.vehicle.mode.name == "GUIDED_NOGPS":
-      
-      if self.atc.STATE == VehicleStates.hover: 
+
+      if self.atc.STATE == VehicleStates.hover:
         # self.atc.hover()
         self.send_angle_thrust(StandardAttitudes.level, StandardThrusts.hover)
       elif self.atc.STATE == VehicleStates.unknown:
