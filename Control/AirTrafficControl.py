@@ -94,7 +94,7 @@ class Tower(object):
   DRIFT_CORRECT_THRESHOLD = 0.05
   DRIFT_COMPENSATION = 0.25
   MAX_DRIFT_COMPENSATION_DEG = 5
-  MAX_ANGLE_DEG = 20
+  MAX_ANGLE_ALL_AXES = 20
 
   def __init__(self):
     self.start_time = 0
@@ -147,7 +147,7 @@ class Tower(object):
     while(self.vehicle.armed):
       sleep(1)
 
-  def switch_control(self, *args, **kwargs):
+  def switch_control(self):
     if not self.failsafes:
       self.failsafes = FailsafeController(self)
       self.failsafes.start()
@@ -238,7 +238,6 @@ class Tower(object):
 
       self.set_angle_thrust(StandardAttitudes.level, StandardThrusts.hover)
       duration-=1
-    self.land()
 
   def takeoff(self, target_altitude):
     self.arm_drone()
@@ -277,6 +276,9 @@ class Tower(object):
         updated_attitude.pitch_deg += 1
       else:
         updated_attitude.pitch_deg = direction.pitch_deg
+
+      if(updated_attitude.pitch_deg < -self.MAX_ANGLE_ALL_AXES):
+        updated_attitude.pitch_deg = -self.MAX_ANGLE_ALL_AXES
 
       updated_attitude.pitch = math.radians(updated_attitude.pitch_deg)
       updated_attitude.quaternion = updated_attitude.get_quaternion()
@@ -326,20 +328,7 @@ class Tower(object):
 
       updated_attitude = DroneAttitude(pitch_angle, self.last_attitude.yaw, roll_angle)
 
-      message = self.vehicle.message_factory.set_attitude_target_encode(
-        0,                                        # Timestamp in milliseconds since system boot (not used).
-        0,                                        # System ID
-        0,                                        # Component ID
-        self.STANDARD_ATTITUDE_BIT_FLAGS,         # Bit flags. For more info, see http://mavlink.org/messages/common#SET_ATTITUDE_TARGET.
-        updated_attitude.quaternion,              # Attitude quaternion.
-        0,                                        # Body roll rate.
-        0,                                        # Body pitch rate.
-        0,                                        # Body yaw rate.
-        StandardThrusts.full                # Collective thrust, from 0-1.
-      )
-
-      self.vehicle.send_mavlink(message)
-      self.vehicle.commands.upload()
+      self.set_angle_thrust(updated_attitude, StandardThrusts.hover)
 
       print("Sent message.")
 
