@@ -13,7 +13,9 @@ from datetime import datetime, timedelta
 from os import system
 from time import sleep
 from copy import deepcopy
+from Collision import Sonar
 
+import RPi.GPIO as GPIO
 import dronekit
 import math
 import os
@@ -59,7 +61,7 @@ class StandardAttitudes(object):
   backward = DroneAttitude(0,-5,0)
   left = DroneAttitude(-5, 0, 0)
   right = DroneAttitude(5, 0, 0)
-  
+
 class StandardThrusts(object):
   none = 0.00
   hover = 0.50
@@ -128,7 +130,7 @@ class Tower(object):
       self.failsafes = FailsafeController(self)
       self.failsafes.start()
       self.start_time = time.time()
-      
+
       print("\nSuccessfully connected to vehicle.")
 
   def shutdown(self):    
@@ -141,7 +143,7 @@ class Tower(object):
     self.vehicle.armed = True
     while(not self.vehicle.armed):
       sleep(1)
-  
+
   def disarm_drone(self):
     self.vehicle.armed = False
     while(self.vehicle.armed):
@@ -195,7 +197,7 @@ class Tower(object):
 
       drift_distance = math.hypot(drift_distance_x, drift_distance_y)
       adjust_attitude = deepcopy(StandardAttitudes.level)
-        
+
       corrected_distance_x = 0
       corrected_distance_y = 0
       corrected_distance = 0
@@ -240,6 +242,9 @@ class Tower(object):
       duration-=1
 
   def takeoff(self, target_altitude):
+
+    self.STATE = VehicleStates.takeoff
+
     self.arm_drone()
     self.vehicle.mode = dronekit.VehicleMode("GUIDED_NOGPS")
 
@@ -247,7 +252,7 @@ class Tower(object):
       sleep(1)
 
     initial_alt = self.vehicle.location.global_relative_frame.alt
-    
+
     while((self.vehicle.location.global_relative_frame.alt - initial_alt) < target_altitude):
       self.set_angle_thrust(StandardAttitudes.level, StandardThrusts.takeoff)
       sleep(1)
@@ -306,7 +311,7 @@ class Tower(object):
     self.STATE = VehicleStates.flying
 
     desired_angle = math.radians(desired_angle)
-      
+
     max_angle = desired_angle
     altitude_to_hold = self.vehicle.location.global_relative_frame.alt
 
@@ -336,14 +341,16 @@ class Tower(object):
         max_angle = desired_angle * self.ANGLE_INCREMENT
       elif(current_altitude < altitude_to_hold):
         max_angle = desired_angle * self.ANGLE_DECREMENT
-    
+
       sleep(1)
       
     self.fly_for_time(1, StandardAttitudes.forward, self.vehicle.airspeed, True)
-
+    
   def check_sonar_sensors(self):
+    sonar = Sonar.Sonar(2,3, "Main")
+    print("%s Measured Distance = %.1f cm" % (sonar.getName(), sonar.getDistance()))
     pass
-  
+
   def check_battery_voltage(self):
     pass
 
@@ -366,5 +373,5 @@ class FailsafeController(threading.Thread):
         self.atc.land()
 
     self.stoprequest.set()
+    GPIO.cleanup()
     super(FailsafeController, self).join(timeout)
-

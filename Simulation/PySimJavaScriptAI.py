@@ -1,9 +1,16 @@
+# Python simulation of International Aerial Robotics Competition, Mission 7
+# by Tanner Winkelman
+
+# To run, use IDLE or the python command:$ python [filename].py
+
+
 import pygame, sys, math, random, time
 
 
-RUN_SPEED = 5 # times.  Note: limited by hardware
+RUN_SPEED = 20 # times.  Note: limited by hardware
+FRAMES_TO_SKIP = 0 # the number of roomba frames that pass for every time the simulation is drawn
 
-PI = 3.14159265359
+TRACKER_OKAY_ROT_WIDTH = 90 # degrees, the angle width of acceptable direction for a roomba the drone is tracking.  This value is divided by two when it is used.
 MAX_NOISE = 20
 ROOMBA_FRAME_DELAY = 200 # milliseconds, 1/5 second
 GROUND_ROBOT_NOISE_INTERVAL = 5 # seconds
@@ -18,6 +25,7 @@ ROOMBA_RADIUS = 0.2 # meters
 OBSTACLE_ROBOT_COUNT = 4
 OBSTACLE_ROBOT_START_RADIUS = 5 # meters
 OBSTACLE_ROBOT_NOISE = 2 # maximum degrees per roomba frame.  In the videos the obstacle robots get way off their circle, so this simulation has noise in the obstacle robots.
+OBSTACLE_ROBOT_BUMP_FACTOR = 0.1 # to prevent obstacle robots from getting stuck
 DRONE_FRAME_RATE = 60 # frames per second
 DRONE_PIXEL_SPEED = 2 # the drone's agility, treated as a safety factor for slowing down to hit targets in Sim9AI()
 DRONE_ACCEL_NUMBER = 0.005 # I have no idea what unit this is.  This is from the JavaScript simulation.
@@ -27,6 +35,8 @@ ROOMBA_HEIGHT = 0.1 # meters
 ROOMBA_TAPPABLE_HEIGHT = 0.12 # meters from floor
 OBSTACLE_RADIUS = 0.05 # meters
 OK_TO_LEAVE_THRESHOLD = 16 # of 24 meters
+PI = 3.14159265359 # don't change this value
+
 
 def rotate2d(pos,rad): x,y=pos; s,c = math.sin(rad),math.cos(rad); return x*c-y*s,y*c+x*s;
 def distance2d(pos1,pos2): return math.sqrt( pow(pos1[0] - pos2[0], 2) + pow(pos1[1] - pos2[1], 2) )
@@ -143,6 +153,8 @@ class obstacleRobot(roomba):
   
   def bump(self):
     self.go = False
+    coordChange = rotate2d((GROUND_ROBOT_SPEED*PIXELS_PER_METER*ROOMBA_FRAME_DELAY/1000,0),self.rotDeg*PI/180)
+    self.pos[0] -= coordChange[0] * OBSTACLE_ROBOT_BUMP_FACTOR; self.pos[1] -= coordChange[1] * OBSTACLE_ROBOT_BUMP_FACTOR
 
   def iterate(self, times = 1 ):
     for time in range( times ):
@@ -181,42 +193,157 @@ class drone:
     self.OkToLeave=OkToLeave
     self.NextRotate=NextRotate
 
-  def Sim9AI( self, groundRobotsPos, groundRobotsRotDeg, groundRobotsStillIn, obstacleRobotsPos, times = 1 ):
+  #self -> called object
+  #groundRobotsPos    -> array of active ground robot's positions (x and y)
+  #groundRobotsRotDeg -> array of directions of ground robots
+  #obstacleRobotsPos  -> array of active obstacle robot's positions (x and y)
+  #time               -> number of times to run (defaults to 1)
+  def Sim9AI( self, groundRobotsPos, groundRobotsRotDeg, obstacleRobotsPos, times = 1 ):
   
     #print( groundRobotsPos, groundRobotsRotDeg, groundRobotsStillIn, obstacleRobotsPos )
   
     for k in range( times ):
+
+      try:
+        
+        self.iterate()
+        if self.NextRotate <= 0:
+          self.NextRotate = (20 * DRONE_FRAME_RATE)
+        self.NextRotate -= (DRONE_FRAME_RATE/12)
+        TargetRot = 270
+
+        if self.TargetRobot >= len( groundRobotsPos ):
+          self.OkToLeave = True
+          self.TargetRobot = -1
+      
+        PrevTargetRobot = self.TargetRobot
+        #alert(DataArray[CurrentFrame].Drones[index].OkToLeave + "\n" + DataArray[CurrentFrame].Drones[index].TargetRobot);
+        if(self.OkToLeave == True and self.NextRotate / DRONE_FRAME_RATE > 12 ):
+          TempX = 0
+          TempY = 0
+          self.TargetRobot = -1
+          for index2 in range( len( groundRobotsPos ) ):
+            Rot = ( groundRobotsRotDeg[index2] % 360 + 360) if ( groundRobotsRotDeg[index2] % 360 < 0) else ( groundRobotsRotDeg[index2] % 360)
+            TargetRot = 180 + (180 / PI) * math.atan2( groundRobotsPos[index2][1] - (METERS_PER_WINDOW * PIXELS_PER_METER * 2 / 24), groundRobotsPos[index2][0] - (METERS_PER_WINDOW * PIXELS_PER_METER / 2) );
+            #print( index2, groundRobotsPos[index2][0], groundRobotsPos[index2][1], TargetRot )
+            if (Rot < TargetRot - 90 / 2 or Rot > TargetRot + 90 / 2):
+              SafeTarget = True;
+              for index3 in range( OBSTACLE_ROBOT_COUNT ):
+                A = groundRobotsPos[index2][0] - obstacleRobotsPos[index3][0]
+                B = groundRobotsPos[index2][1] - obstacleRobotsPos[index3][1]
+                if(math.sqrt(math.pow(A, 2) + math.pow(B, 2)) / PIXELS_PER_METER < (ROOMBA_RADIUS + ROOMBA_RADIUS) / PIXELS_PER_METER + 1):
+                  SafeTarget = False
+              if SafeTarget:
+                if( TempX == 0 or groundRobotsPos[index2][1] < TempY ):
+                  self.TargetRobot = index2
+                  TempX = groundRobotsPos[index2][0]
+                  TempY = groundRobotsPos[index2][1]
+        
+        TargetRot = 270
+        
+        if self.TargetRobot >= 0:
+          TargetX = groundRobotsPos[self.TargetRobot][0]
+          TargetY = groundRobotsPos[self.TargetRobot][1]
+        else:
+          TargetX = METERS_PER_WINDOW*PIXELS_PER_METER/2
+          TargetY = METERS_PER_WINDOW*PIXELS_PER_METER/2
+      
+        XDiff = self.X - TargetX
+        YDiff = self.Y - TargetY
+        RotationToGroundRobot = math.atan2(XDiff, YDiff) * 180 / PI # now, atan2 accepts (y,x), but in sim9 this is how it is (it's the same way in JavaScript)
+        PerpLine = RotationToGroundRobot + 90
+          
+        XSpeed = self.XSpeed
+        YSpeed = self.YSpeed
+        XPos = self.X
+        YPos = self.Y
+        while XSpeed != 0 or YSpeed != 0:
+          if(XSpeed > DRONE_ACCEL_NUMBER):
+            XSpeed -= DRONE_ACCEL_NUMBER
+          elif(XSpeed < -DRONE_ACCEL_NUMBER):
+            XSpeed += DRONE_ACCEL_NUMBER
+          else:
+            XSpeed = 0
+            
+          if(YSpeed > DRONE_ACCEL_NUMBER):
+            YSpeed = YSpeed - DRONE_ACCEL_NUMBER
+          elif(YSpeed < -DRONE_ACCEL_NUMBER):
+            YSpeed = YSpeed + DRONE_ACCEL_NUMBER
+          else:
+            YSpeed = 0
+            
+          XPos += XSpeed
+          YPos += YSpeed
+        
+        if((XPos < TargetX and self.X < TargetX) or (XPos < TargetX and self.X > TargetX)):
+          self.XSpeed += DRONE_PIXEL_SPEED * DRONE_ACCEL_NUMBER
+        else:
+          self.XSpeed += DRONE_PIXEL_SPEED * -DRONE_ACCEL_NUMBER
+                            
+        if((YPos < TargetY and self.Y < TargetY) or (YPos < TargetY and self.Y > TargetY)):
+          self.YSpeed = self.YSpeed + DRONE_PIXEL_SPEED * DRONE_ACCEL_NUMBER
+        else:
+          self.YSpeed = self.YSpeed + DRONE_PIXEL_SPEED * -DRONE_ACCEL_NUMBER
+
+
+        if self.TargetRobot >= 0:
+          TargetRobotRot = groundRobotsRotDeg[self.TargetRobot]
+          TargetRobotRot = ( TargetRobotRot % 360 + 360) if ( TargetRobotRot % 360 < 0) else ( TargetRobotRot % 360)
+          TargetRot = 180 + (180 / PI) * math.atan2( groundRobotsPos[self.TargetRobot][1] - (METERS_PER_WINDOW * PIXELS_PER_METER * 0), groundRobotsPos[self.TargetRobot][0] - (METERS_PER_WINDOW * PIXELS_PER_METER / 2) )
+          if ( ( TargetRobotRot > TargetRot + 70 / 2 or TargetRobotRot < TargetRot - 70 / 2 ) and math.pow( ROOMBA_RADIUS * PIXELS_PER_METER, 2) > math.pow( self.X - groundRobotsPos[self.TargetRobot][0], 2) + math.pow( self.Y - groundRobotsPos[self.TargetRobot][1], 2) ):
+            self.Z = ROOMBA_HEIGHT
+            
+            if groundRobotsPos[self.TargetRobot][1] > METERS_PER_WINDOW * PIXELS_PER_METER * OK_TO_LEAVE_THRESHOLD / 24:
+              self.OkToLeave = False
+            else:
+              self.OkToLeave = True
+            
+          else:
+            self.Z = 3 * PIXELS_PER_METER
+      except Exception as e:
+        print( "Error: TargetRobot:" , self.TargetRobot, "Message:", str(e) )
+
+
+  #def idealTarget( self, robotPos, , nextRotation, isSafe = True):
+    """
+    d = distance2d( (self.XPos, self.YPos), robotPos)
+    e1 = robotPos[1] - METERS_PER_WINDOW * PIXELS_PER_METER * 2/24
+    e2 = abs(robotPos[0] - METERS_PER_WINDOW * PIXELS_PER_METER * 22/24)
+    e3 = abs(robotPos[1] - METERS_PER_WINDOW * PIXELS_PER_METER * 22/24)
+    e4 = robotPos[0] - METERS_PER_WINDOW * PIXELS_PER_METER * 2/24
+    if GROUND_ROBOT_SPEED * nextRotation =
+    """
+    #Danger of Exit (lump w/ 3)
+    #isSafe (use other function as parameter) (iterate through distance function w/ obst)
+    #Distance to Goal (lump w/ 1)
+    #Distance from Drone (complete, need to implement)
+
+  def Tracker( self, groundRobotsPos, groundRobotsRotDeg, obstacleRobotsPos, times = 1 ):
+    
+    for k in range( times ):
     
       self.iterate()
+    
+      closestDist = METERS_PER_WINDOW * PIXELS_PER_METER
+      closestDistIndex = -1
+      dist = 0
+      for index in range(len(groundRobotsPos)):
+        dist = distance2d( (self.X, self.Y), groundRobotsPos[index] )
+        if dist < closestDist:
+          SafeTarget = True
+          for obstaclePos in obstacleRobotsPos:
+            if SafeTarget and distance2d( obstaclePos, groundRobotsPos[index] ) / PIXELS_PER_METER < (ROOMBA_RADIUS + ROOMBA_RADIUS) / PIXELS_PER_METER + 1:
+              SafeTarget = False
+          if SafeTarget:
+            closestDistIndex = index
+            closestDist = dist
+      self.TargetRobot = closestDistIndex
+      self.OkToLeave = False
       
-      TargetRot = 270
-    
-      PrevTargetRobot = self.TargetRobot
-      #alert(DataArray[CurrentFrame].Drones[index].OkToLeave + "\n" + DataArray[CurrentFrame].Drones[index].TargetRobot);
-      if(self.OkToLeave == True and self.NextRotate / DRONE_FRAME_RATE > 12 or groundRobotsStillIn[self.TargetRobot] == False):
-        TempX = 0
-        TempY = 0
-        self.TargetRobot = -1
-        for index2 in range( GROUND_ROBOT_COUNT ):
-          Rot = ( groundRobotsRotDeg[index2] % 360 + 360) if ( groundRobotsRotDeg[index2] % 360 < 0) else ( groundRobotsRotDeg[index2] % 360)
-          if groundRobotsStillIn[index2] == True and (Rot < TargetRot - 70 / 2 or Rot > TargetRot + 70 / 2):
-            SafeTarget = True;
-            for index3 in range( OBSTACLE_ROBOT_COUNT ):
-              A = groundRobotsPos[index2][0] - obstacleRobotsPos[index3][0]
-              B = groundRobotsPos[index2][1] - obstacleRobotsPos[index3][1]
-              if(math.sqrt(math.pow(A, 2) + math.pow(B, 2)) / PIXELS_PER_METER < (ROOMBA_RADIUS + ROOMBA_RADIUS) / PIXELS_PER_METER + 1):
-                SafeTarget = False
-            if SafeTarget:
-              # get the number of robots still in
-              numStillIn = 0
-              for bot in groundRobotsStillIn:
-                if bot:
-                  numStillIn += 1
-              if( TempX == 0 or groundRobotsPos[index2][1] < TempY ):
-                self.TargetRobot = index2
-                TempX = groundRobotsPos[index2][0]
-                TempY = groundRobotsPos[index2][1]
-    
+      
+      TargetX = 0
+      TargetY = 0
+      
       if self.TargetRobot >= 0:
         TargetX = groundRobotsPos[self.TargetRobot][0]
         TargetY = groundRobotsPos[self.TargetRobot][1]
@@ -228,7 +355,9 @@ class drone:
       YDiff = self.Y - TargetY
       RotationToGroundRobot = math.atan2(XDiff, YDiff) * 180 / PI # now, atan2 accepts (y,x), but in sim9 this is how it is (it's the same way in JavaScript)
       PerpLine = RotationToGroundRobot + 90
-        
+      
+      XSpeed = 0
+      YSpeed = 0
       XSpeed = self.XSpeed
       YSpeed = self.YSpeed
       XPos = self.X
@@ -240,38 +369,36 @@ class drone:
           XSpeed += DRONE_ACCEL_NUMBER
         else:
           XSpeed = 0
-          
+
         if(YSpeed > DRONE_ACCEL_NUMBER):
           YSpeed = YSpeed - DRONE_ACCEL_NUMBER
         elif(YSpeed < -DRONE_ACCEL_NUMBER):
           YSpeed = YSpeed + DRONE_ACCEL_NUMBER
         else:
           YSpeed = 0
-          
+        
         XPos += XSpeed
         YPos += YSpeed
       
-      if((XPos < TargetX and self.X < TargetX) or (XPos < TargetX and self.X > TargetX)):
+      if(XPos < TargetX):
         self.XSpeed += DRONE_PIXEL_SPEED * DRONE_ACCEL_NUMBER
       else:
         self.XSpeed += DRONE_PIXEL_SPEED * -DRONE_ACCEL_NUMBER
-                          
-      if((YPos < TargetY and self.Y < TargetY) or (YPos < TargetY and self.Y > TargetY)):
+    
+      if(YPos < TargetY):
         self.YSpeed = self.YSpeed + DRONE_PIXEL_SPEED * DRONE_ACCEL_NUMBER
       else:
         self.YSpeed = self.YSpeed + DRONE_PIXEL_SPEED * -DRONE_ACCEL_NUMBER
-
-      TargetRobotRot = groundRobotsRotDeg[self.TargetRobot]
-      TargetRobotRot = ( TargetRobotRot % 360 + 360) if ( TargetRobotRot % 360 < 0) else ( TargetRobotRot % 360)
-      if ( ( TargetRobotRot > TargetRot + 70 / 2 or TargetRobotRot < TargetRot - 70 / 2 ) and math.pow( ROOMBA_RADIUS * PIXELS_PER_METER, 2) > math.pow( self.X - groundRobotsPos[self.TargetRobot][0], 2) + math.pow( self.Y - groundRobotsPos[self.TargetRobot][1], 2) ):
-        self.Z = ROOMBA_HEIGHT
-        if groundRobotsPos[self.TargetRobot][1] > METERS_PER_WINDOW * PIXELS_PER_METER * OK_TO_LEAVE_THRESHOLD / 24:
-          self.OkToLeave = False
+  
+      if self.TargetRobot >= 0:
+        TargetRobotRot = groundRobotsRotDeg[self.TargetRobot]
+        TargetRobotRot = ( TargetRobotRot % 360 + 360) if ( TargetRobotRot % 360 < 0) else ( TargetRobotRot % 360)
+        TargetRot = 180 + (180 / PI) * math.atan2( groundRobotsPos[self.TargetRobot][1] - (METERS_PER_WINDOW * PIXELS_PER_METER * 0), groundRobotsPos[self.TargetRobot][0] - (METERS_PER_WINDOW * PIXELS_PER_METER / 2) )
+        if ( ( TargetRobotRot > TargetRot + TRACKER_OKAY_ROT_WIDTH / 2 or TargetRobotRot < TargetRot - TRACKER_OKAY_ROT_WIDTH / 2 ) and math.pow( ROOMBA_RADIUS * PIXELS_PER_METER, 2) > math.pow( self.X - groundRobotsPos[self.TargetRobot][0], 2) + math.pow( self.Y - groundRobotsPos[self.TargetRobot][1], 2) ):
+          self.Z = ROOMBA_HEIGHT
+      
         else:
-          self.OkToLeave = True
-      else:
-        self.Z = 3 * PIXELS_PER_METER
-        
+          self.Z = 3 * PIXELS_PER_METER
 
 
   def iterate( self, times = 1 ):
@@ -316,6 +443,8 @@ for k in range( DRONE_COUNT ):
 
 seconds = float(0)
 
+frameSkip = 0
+
 while seconds < 600:
   seconds += float(ROOMBA_FRAME_DELAY) / float(1000)
   
@@ -342,12 +471,14 @@ while seconds < 600:
 
 
   for k in range( DRONE_COUNT ):
-    groundBotsPos, groundBotsStillIn, groundBotsRotDeg, obstacleBotsPos = [], [], [], []
+    groundBotsPos, groundBotsRotDeg, obstacleBotsPos = [], [], []
     for groundBot in groundRobots:
-      groundBotsPos.append( groundBot.pos ); groundBotsStillIn.append( groundBot.stillIn ); groundBotsRotDeg.append( groundBot.rotDeg )
+      if groundBot.stillIn:
+        groundBotsPos.append( groundBot.pos ); groundBotsRotDeg.append( groundBot.rotDeg )
     for obstacleBot in obstacleRobots: obstacleBotsPos.append( obstacleBot.pos )
 
-    drones[k].Sim9AI( groundBotsPos, groundBotsRotDeg, groundBotsStillIn, obstacleBotsPos, int( DRONE_FRAME_RATE * ROOMBA_FRAME_DELAY / 1000 + 0.5 ) )
+    
+    drones[k].Sim9AI( groundBotsPos, groundBotsRotDeg, obstacleBotsPos, int( DRONE_FRAME_RATE * ROOMBA_FRAME_DELAY / 1000 + 0.5 ) )
 
     for j in range( GROUND_ROBOT_COUNT ):
       if math.pow( ROOMBA_RADIUS * PIXELS_PER_METER, 2) > math.pow( drones[k].X - groundRobots[j].pos[0], 2) + math.pow( drones[k].Y - groundRobots[j].pos[1], 2) and drones[k].Z < ROOMBA_TAPPABLE_HEIGHT:
@@ -360,36 +491,42 @@ while seconds < 600:
 
 
 
+  if frameSkip <= 0:
+    screen.fill((0,0,0))
 
-  screen.fill((0,0,0))
-
-  for k in range(20):
-    pygame.draw.line(screen,(255,255,255),(60+(20*k),40),(60+(20*k),440),1)
-    pygame.draw.line(screen,(255,255,255),(40,60+(20*k)),(440,60+(20*k)),1)
-  pygame.draw.line(screen,(255,255,255),(40,40),(40,440),1)
-  pygame.draw.line(screen,(255,0,0),(40,440),(440,440),1)
-  pygame.draw.line(screen,(255,255,255),(440,440),(440,40),1)
-  pygame.draw.line(screen,(0,255,0),(440,40),(40,40),1)
-  for k in range(GROUND_ROBOT_COUNT):
-    pygame.draw.circle(screen, (255,255,255), (int(groundRobots[k].pos[0] + 0.5),int(groundRobots[k].pos[1] + 0.5)), int(ROOMBA_RADIUS * PIXELS_PER_METER + 0.5), 0)
-  for k in range(OBSTACLE_ROBOT_COUNT):
-    pygame.draw.circle(screen, (255,255,0), (int(obstacleRobots[k].pos[0] + 0.5),int(obstacleRobots[k].pos[1] + 0.5)), int(ROOMBA_RADIUS * PIXELS_PER_METER + 0.5), 0)
-  for k in range( DRONE_COUNT ):
-    pygame.draw.circle(screen, (255,0,255), (int(drones[k].X + 0.5),int(drones[k].Y + 0.5)), int( DRONE_RADIUS * PIXELS_PER_METER + 0.5 ), 0)
-
-
+    for k in range(20):
+      pygame.draw.line(screen,(255,255,255),(60+(20*k),40),(60+(20*k),440),1)
+      pygame.draw.line(screen,(255,255,255),(40,60+(20*k)),(440,60+(20*k)),1)
+    pygame.draw.line(screen,(255,255,255),(40,40),(40,440),1)
+    pygame.draw.line(screen,(255,0,0),(40,440),(440,440),1)
+    pygame.draw.line(screen,(255,255,255),(440,440),(440,40),1)
+    pygame.draw.line(screen,(0,255,0),(440,40),(40,40),1)
+    for k in range(GROUND_ROBOT_COUNT):
+      pygame.draw.circle(screen, (255,255,255), (int(groundRobots[k].pos[0] + 0.5),int(groundRobots[k].pos[1] + 0.5)), int(ROOMBA_RADIUS * PIXELS_PER_METER + 0.5), 0)
+    for k in range(OBSTACLE_ROBOT_COUNT):
+      pygame.draw.circle(screen, (255,255,0), (int(obstacleRobots[k].pos[0] + 0.5),int(obstacleRobots[k].pos[1] + 0.5)), int(ROOMBA_RADIUS * PIXELS_PER_METER + 0.5), 0)
+    for k in range( DRONE_COUNT ):
+      pygame.draw.circle(screen, (255,0,255), (int(drones[k].X + 0.5),int(drones[k].Y + 0.5)), int( DRONE_RADIUS * PIXELS_PER_METER + 0.5 ), 0)
 
 
 
 
-  myfont = pygame.font.SysFont("monospace", 15)
-  label = myfont.render( str(seconds), 1, (255,255,0))
-  screen.blit(label, (METERS_PER_WINDOW*PIXELS_PER_METER - 50, METERS_PER_WINDOW*PIXELS_PER_METER - 20))
+
+
+    myfont = pygame.font.SysFont("monospace", 15)
+    label = myfont.render( str(seconds), 1, (255,255,0))
+    screen.blit(label, (METERS_PER_WINDOW*PIXELS_PER_METER - 50, METERS_PER_WINDOW*PIXELS_PER_METER - 20))
+
+    pygame.display.flip()
+
+    frameSkip = FRAMES_TO_SKIP
+  else:
+    frameSkip = frameSkip - 1
 
   time.sleep( (ROOMBA_FRAME_DELAY / float(1000)) / float(RUN_SPEED) )
 
   
-  pygame.display.flip()
+
 
   key = pygame.key.get_pressed()
 
