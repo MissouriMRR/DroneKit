@@ -241,6 +241,23 @@ class Tower(object):
       self.set_angle_thrust(StandardAttitudes.level, StandardThrusts.hover)
       duration-=1
 
+  @switch_control
+  def turnaway(self)
+  adjust_attitude = deepcopy(StandardAttitudes.level)
+    sonar = Sonar.Sonar(2,3, "Main")
+    if (sonar.getDistance < sonar.SAFE_DISTANCE && sonar.getName == "Left"):
+      while (sonar.getDistance < sonar.SAFE_DISTANCE):
+        adjust_attitude = DroneAttitude(self.HOVER_ADJUST_DEG, adjust_attitude.pitch_deg, adjust_attitude.yaw_deg)
+    if (sonar.getDistance < sonar.SAFE_DISTANCE && sonar.getName == "Right"):
+      while (sonar.getDistance < sonar.SAFE_DISTANCE):
+        adjust_attitude = DroneAttitude(-self.HOVER_ADJUST_DEG, adjust_attitude.pitch_deg, adjust_attitude.yaw_deg)
+    #if (sonar.getDistance < sonar.SAFE_DISTANCE && sonar.getName == "Front"):
+      #while (sonar.getDistance < sonar.SAFE_DISTANCE):
+        #adjust_attitude = DroneAttitude(adjust_attitude.roll_deg, self.HOVER_ADJUST_DEG, adjust_attitude.yaw_deg)
+    #if (sonar.getDistance < sonar.SAFE_DISTANCE && sonar.getName == "Back"):
+      #while (sonar.getDistance < sonar.SAFE_DISTANCE):
+        #adjust_attitude = DroneAttitude(adjust_attitude.roll_deg, -self.HOVER_ADJUST_DEG, adjust_attitude.yaw_deg)
+
   def takeoff(self, target_altitude):
 
     self.STATE = VehicleStates.takeoff
