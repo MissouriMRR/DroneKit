@@ -93,7 +93,7 @@ class Tower(object):
   HOVER_MAX_DRIFT_TIME = 1.5
   DRIFT_CORRECT_THRESHOLD = 0.05
   DRIFT_COMPENSATION = 0.25
-  MAX_DRIFT_COMPENSATION_DEG = 5
+  MAX_DRIFT_COMPENSATION = 5
   MAX_ANGLE_ALL_AXES = 20
 
   def __init__(self):
@@ -115,8 +115,8 @@ class Tower(object):
   def initialize(self):
     if(not self.vehicle_initialized):
       print("\nConnecting via " + self.SERIAL_PORT + " to PixHawk...")
-      # self.vehicle = dronekit.connect(self.SERIAL_PORT, baud=self.BAUD_RATE, wait_ready=True)
-      self.vehicle = dronekit.connect(self.USB, wait_ready=True)
+      self.vehicle = dronekit.connect(self.SERIAL_PORT, baud=self.BAUD_RATE, wait_ready=True)
+      # self.vehicle = dronekit.connect(self.USB, wait_ready=True)
 
       if not self.vehicle:
         print("\nUnable to connect to vehicle.")
@@ -187,11 +187,14 @@ class Tower(object):
     self.set_angle_thrust(StandardAttitudes.level, StandardThrusts.hover)
     self.STATE = VehicleStates.hover
 
+    velocity_offset_x = self.vehicle.velocity[0]
+    velocity_offset_y = self.vehicle.velocity[1]
+
     while(duration > 0):
       sleep(self.HOVER_MAX_DRIFT_TIME)
 
-      drift_distance_x = self.vehicle.velocity[0] * self.HOVER_MAX_DRIFT_TIME
-      drift_distance_y = self.vehicle.velocity[1] * self.HOVER_MAX_DRIFT_TIME
+      drift_distance_x = (self.vehicle.velocity[0] - velocity_offset_x) * self.HOVER_MAX_DRIFT_TIME
+      drift_distance_y = (self.vehicle.velocity[1] - velocity_offset_y) * self.HOVER_MAX_DRIFT_TIME
 
       drift_distance = math.hypot(drift_distance_x, drift_distance_y)
       adjust_attitude = deepcopy(StandardAttitudes.level)
@@ -205,31 +208,31 @@ class Tower(object):
 
           if(drift_distance_x < 0):
             adjust_attitude.roll_deg += self.DRIFT_COMPENSATION
-            if adjust_attitude > self.MAX_DRIFT_COMPENSATION_DEG:
-              adjust_attitude.roll_deg = self.MAX_DRIFT_COMPENSATION_DEG
+            if adjust_attitude > self.MAX_DRIFT_COMPENSATION:
+              adjust_attitude.roll_deg = self.MAX_DRIFT_COMPENSATION
             adjust_attitude = DroneAttitude(adjust_attitude.roll_deg, adjust_attitude.pitch_deg, adjust_attitude.yaw_deg)
             print("\nDrifted left, correcting right.")
           elif(drift_distance_x > 0):
             adjust_attitude.roll_deg -= self.DRIFT_COMPENSATION
-            if adjust_attitude < -self.MAX_DRIFT_COMPENSATION_DEG:
-              adjust_attitude.roll_deg = -self.MAX_DRIFT_COMPENSATION_DEG
+            if adjust_attitude < -self.MAX_DRIFT_COMPENSATION:
+              adjust_attitude.roll_deg = -self.MAX_DRIFT_COMPENSATION
             adjust_attitude = DroneAttitude(adjust_attitude.roll_deg, adjust_attitude.pitch_deg, adjust_attitude.yaw_deg)
             print("\nDrifted right, correcting left.")
           if(drift_distance_y < 0):
             adjust_attitude.pitch_deg -= self.DRIFT_COMPENSATION
-            if adjust_attitude < -self.MAX_DRIFT_COMPENSATION_DEG:
-              adjust_attitude.roll_deg = -self.MAX_DRIFT_COMPENSATION_DEG
+            if adjust_attitude < -self.MAX_DRIFT_COMPENSATION:
+              adjust_attitude.roll_deg = -self.MAX_DRIFT_COMPENSATION
             adjust_attitude = DroneAttitude(adjust_attitude.roll_deg, adjust_attitude.pitch_deg, adjust_attitude.yaw_deg)
             print("\nDrifted backwards, correcting forward.")
           elif(drift_distance_y > 0):
             adjust_attitude.pitch_deg += self.DRIFT_COMPENSATION
-            if adjust_attitude > self.MAX_DRIFT_COMPENSATION_DEG:
-              adjust_attitude.roll_deg = self.MAX_DRIFT_COMPENSATION_DEG
+            if adjust_attitude > self.MAX_DRIFT_COMPENSATION:
+              adjust_attitude.roll_deg = self.MAX_DRIFT_COMPENSATION
             adjust_attitude = DroneAttitude(adjust_attitude.roll_deg, adjust_attitude.pitch_deg, adjust_attitude.yaw_deg)
             print("\nDrifted forward, correcting backwards.")
 
-        corrected_distance_x = self.vehicle.velocity[0]
-        corrected_distance_y = self.vehicle.velocity[1]
+        corrected_distance_x = self.vehicle.velocity[0] - velocity_offset_x
+        corrected_distance_y = self.vehicle.velocity[1] - velocity_offset_y
         corrected_distance = math.hypot(corrected_distance_x, corrected_distance_y)
 
         self.set_angle_thrust(adjust_attitude, StandardThrusts.hover)
@@ -279,6 +282,21 @@ class Tower(object):
 
       if(updated_attitude.pitch_deg < -self.MAX_ANGLE_ALL_AXES):
         updated_attitude.pitch_deg = -self.MAX_ANGLE_ALL_AXES
+
+      if(updated_attitude.pitch_deg > self.MAX_ANGLE_ALL_AXES):
+        updated_attitude.pitch_deg = self.MAX_ANGLE_ALL_AXES
+
+      if(updated_attitude.roll_deg < -self.MAX_ANGLE_ALL_AXES):
+        updated_attitude.roll_deg = -self.MAX_ANGLE_ALL_AXES
+      
+      if(updated_attitude.roll_deg > self.MAX_ANGLE_ALL_AXES):
+        updated_attitude.roll_deg = self.MAX_ANGLE_ALL_AXES
+
+      if(updated_attitude.yaw_deg < -self.MAX_ANGLE_ALL_AXES):
+        updated_attitude.yaw_deg = -self.MAX_ANGLE_ALL_AXES
+
+      if(updated_attitude.yaw_deg > self.MAX_ANGLE_ALL_AXES):
+        updated_attitude.yaw_deg = self.MAX_ANGLE_ALL_AXES
 
       updated_attitude.pitch = math.radians(updated_attitude.pitch_deg)
       updated_attitude.quaternion = updated_attitude.get_quaternion()
