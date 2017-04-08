@@ -248,15 +248,21 @@ class Tower(object):
     if (sonar.getDistance < sonar.SAFE_DISTANCE && sonar.getName == "Left"):
       while (sonar.getDistance < sonar.SAFE_DISTANCE):
         adjust_attitude = DroneAttitude(self.HOVER_ADJUST_DEG, adjust_attitude.pitch_deg, adjust_attitude.yaw_deg)
+        self.set_angle_thrust(adjust_attitude, StandardThrusts.hover)
     if (sonar.getDistance < sonar.SAFE_DISTANCE && sonar.getName == "Right"):
       while (sonar.getDistance < sonar.SAFE_DISTANCE):
         adjust_attitude = DroneAttitude(-self.HOVER_ADJUST_DEG, adjust_attitude.pitch_deg, adjust_attitude.yaw_deg)
+        self.set_angle_thrust(adjust_attitude, StandardThrusts.hover)
     #if (sonar.getDistance < sonar.SAFE_DISTANCE && sonar.getName == "Front"):
       #while (sonar.getDistance < sonar.SAFE_DISTANCE):
         #adjust_attitude = DroneAttitude(adjust_attitude.roll_deg, self.HOVER_ADJUST_DEG, adjust_attitude.yaw_deg)
+        #self.set_angle_thrust(adjust_attitude, StandardThrusts.hover)
     #if (sonar.getDistance < sonar.SAFE_DISTANCE && sonar.getName == "Back"):
       #while (sonar.getDistance < sonar.SAFE_DISTANCE):
         #adjust_attitude = DroneAttitude(adjust_attitude.roll_deg, -self.HOVER_ADJUST_DEG, adjust_attitude.yaw_deg)
+        #self.set_angle_thrust(adjust_attitude, StandardThrusts.hover)
+
+
 
   def takeoff(self, target_altitude):
 
