@@ -89,11 +89,11 @@ class Tower(object):
   ANGLE_INCREMENT = 1.1
   ANGLE_DECREMENT = 0.9
   HOVER_CIRCLE_RADIUS = 0.5
-  HOVER_MAX_DRIFT_TIME = 1.5
+  HOVER_MAX_DRIFT_TIME = 2.5
   DRIFT_CORRECT_THRESHOLD = 0.05
   ACCEL_NOISE_THRESHOLD = 0.09
-  DRIFT_COMPENSATION = 0.25
-  MAX_DRIFT_COMPENSATION = 5
+  DRIFT_COMPENSATION = 5.0
+  MAX_DRIFT_COMPENSATION = 10.0
   MAX_ANGLE_ALL_AXES = 20
 
   def __init__(self):
@@ -114,7 +114,7 @@ class Tower(object):
       # sys.stdout = file
 
       print("\nConnecting via USB to PixHawk...")
-      self.vehicle = dronekit.connect(self.USB_DEV, wait_ready=True)
+      self.vehicle = dronekit.connect(self.USB, wait_ready=True)
 
       if not self.vehicle:
         print("\nUnable to connect to vehicle.")
@@ -182,26 +182,49 @@ class Tower(object):
     self.vehicle.commands.upload()
     self.last_attitude = attitude
     self.last_thrust = thrust
+
+  def get_drift_distance(self, sample_collection_time = HOVER_MAX_DRIFT_TIME):
+    print("\nCollecting velocity samples...")
+    samples = 0
+    x_velocities = []
+    y_velocities = []
+
+    while(samples < sample_collection_time * 1000):
+
+      velocity_x = self.vehicle.velocity[0]
+      velocity_y = self.vehicle.velocity[1]
+
+      if -self.ACCEL_NOISE_THRESHOLD <= velocity_x <= self.ACCEL_NOISE_THRESHOLD:
+        velocity_x = 0
+      if -self.ACCEL_NOISE_THRESHOLD <= velocity_y <= self.ACCEL_NOISE_THRESHOLD:
+        velocity_y = 0
+
+      x_velocities.append(velocity_x)
+      y_velocities.append(velocity_y)
+      samples+=1
+      
+    average_velocity_x = sum(x_velocities) / float(len(x_velocities))
+    average_velocity_y = sum(y_velocities) / float(len(y_velocities))
+
+    drift_distance_x = average_velocity_x * self.HOVER_MAX_DRIFT_TIME
+    drift_distance_y = average_velocity_y * self.HOVER_MAX_DRIFT_TIME
+
+    drift_distance = math.hypot(drift_distance_x, drift_distance_y)
+
+    print("\nVelocity sample collection done.")
+    return drift_distance, drift_distance_x, drift_distance_y
     
   def hover(self, duration=None):
-    # self.set_angle_thrust(StandardAttitudes.level, StandardThrusts.hover)
+    self.set_angle_thrust(StandardAttitudes.level, StandardThrusts.hover)
     self.STATE = VehicleStates.hover
 
     while(duration > 0):
-      sleep(self.HOVER_MAX_DRIFT_TIME)
 
-      velocity_x = self.vehicle.velocity[0]
-      velocity_y = self.vehicle.velocity[0]
+      drift_information = self.get_drift_distance()
+      drift_distance = drift_information[0]
+      drift_distance_x = drift_information[1]
+      drift_distance_y = drift_information[2]
 
-      drift_distance_x = (velocity_x) * self.HOVER_MAX_DRIFT_TIME
-      drift_distance_y = (velocity_y) * self.HOVER_MAX_DRIFT_TIME
-
-      if -self.ACCEL_NOISE_THRESHOLD <= velocity_x <= self.ACCEL_NOISE_THRESHOLD:
-        drift_distance_x = 0
-      if -self.ACCEL_NOISE_THRESHOLD <= velocity_y <= self.ACCEL_NOISE_THRESHOLD:
-        drift_distance_y = 0
-
-      drift_distance = math.hypot(drift_distance_x, drift_distance_y)
       adjust_attitude = deepcopy(StandardAttitudes.level)
         
       corrected_distance_x = 0
@@ -212,8 +235,6 @@ class Tower(object):
 
       if(math.fabs(drift_distance_x) > self.HOVER_CIRCLE_RADIUS or math.fabs(drift_distance_y) > self.HOVER_CIRCLE_RADIUS):
         while(not (-self.DRIFT_CORRECT_THRESHOLD <= correction_delta <= self.DRIFT_CORRECT_THRESHOLD)):
-
-          system("clear")
 
           if(drift_distance_y > 0 and math.fabs(drift_distance_y) > self.HOVER_CIRCLE_RADIUS):
             adjust_attitude.roll_deg -= self.DRIFT_COMPENSATION
@@ -240,17 +261,22 @@ class Tower(object):
             adjust_attitude = DroneAttitude(adjust_attitude.roll_deg, adjust_attitude.pitch_deg, adjust_attitude.yaw_deg)
             print("\Drifted backwards, correcting forward.")
 
-          # self.set_angle_thrust(adjust_attitude, StandardThrusts.hover)
+          self.set_angle_thrust(adjust_attitude, StandardThrusts.hover)
 
-          corrected_distance_x = self.vehicle.velocity[0]
-          corrected_distance_y = self.vehicle.velocity[1]
+          corrected_information = self.get_drift_distance(2)
+          corrected_distance = corrected_information[0]
+          corrected_distance_x = corrected_information[1]
+          corrected_distance_y = corrected_information[2]
 
-          if -self.ACCEL_NOISE_THRESHOLD <= corrected_distance_x <= self.ACCEL_NOISE_THRESHOLD:
-            corrected_distance_x = 0
-          if -self.ACCEL_NOISE_THRESHOLD <= corrected_distance_y <= self.ACCEL_NOISE_THRESHOLD:
-            corrected_distance_y = 0
+          # corrected_distance_x = self.vehicle.velocity[0]
+          # corrected_distance_y = self.vehicle.velocity[1]
 
-          corrected_distance += math.hypot(corrected_distance_x, corrected_distance_y)
+          # if -self.ACCEL_NOISE_THRESHOLD <= corrected_distance_x <= self.ACCEL_NOISE_THRESHOLD:
+          #   corrected_distance_x = 0
+          # if -self.ACCEL_NOISE_THRESHOLD <= corrected_distance_y <= self.ACCEL_NOISE_THRESHOLD:
+          #   corrected_distance_y = 0
+
+          # corrected_distance += math.hypot(corrected_distance_x, corrected_distance_y)
           correction_delta = drift_distance - corrected_distance
 
           print("\nCorrecting: " + str(corrected_distance) + " Drifted " + str(drift_distance))
@@ -259,9 +285,12 @@ class Tower(object):
           print("\nVehicle Attitude: " + " Pitch: " + str(math.degrees(self.vehicle.attitude.pitch)) + " Roll: " + str(math.degrees(self.vehicle.attitude.roll)) + " Yaw: " + str(math.degrees(self.vehicle.attitude.pitch)))
           print("\nX m/s: " + str(self.vehicle.velocity[0]) + " Y m/s: " + str(self.vehicle.velocity[1]))
           print("\nAttitude Adjustments: " + "Roll: " + str(adjust_attitude.roll_deg) + " Pitch: " + str(adjust_attitude.pitch_deg) + " Yaw: " + str(adjust_attitude.yaw_deg))
-          sleep(0.25)
+          # sleep(0.25)
 
-      # self.set_angle_thrust(StandardAttitudes.level, StandardThrusts.hover)
+          system("clear")
+
+      self.set_angle_thrust(StandardAttitudes.level, StandardThrusts.hover)
+      sleep(1)
       duration-=1
 
   def takeoff(self, target_altitude):
