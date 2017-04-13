@@ -73,6 +73,7 @@ class VehicleStates(object):
   takeoff = "TAKEOFF"
   unknown = "UNKNOWN"
   avoidance = "AVOIDANCE"
+  landing = "LANDING"
   landed = "LANDED"
 
 class Tower(object):
@@ -89,12 +90,14 @@ class Tower(object):
   ANGLE_INCREMENT = 1.1
   ANGLE_DECREMENT = 0.9
   HOVER_CIRCLE_RADIUS = 0.5
-  HOVER_MAX_DRIFT_TIME = 2.5
+  HOVER_MAX_DRIFT_TIME = 1
+  HOVER_VELOCITY_SAMPLES = 5000
   DRIFT_CORRECT_THRESHOLD = 0.05
   ACCEL_NOISE_THRESHOLD = 0.09
-  DRIFT_COMPENSATION = 5.0
+  DRIFT_COMPENSATION = 1.0
   MAX_DRIFT_COMPENSATION = 10.0
   MAX_ANGLE_ALL_AXES = 20
+  BATTERY_FAILSAFE_VOLTAGE = 11.50
 
   def __init__(self):
     self.start_time = 0
@@ -110,11 +113,11 @@ class Tower(object):
 
     if(not self.vehicle_initialized):
 
-      # file = open('flight_log.txt', 'w')
-      # sys.stdout = file
+      file = open('flight_log.txt', 'w')
+      sys.stdout = file
 
       print("\nConnecting via USB to PixHawk...")
-      self.vehicle = dronekit.connect(self.USB, wait_ready=True)
+      self.vehicle = dronekit.connect(self.USB_DEV, wait_ready=True)
 
       if not self.vehicle:
         print("\nUnable to connect to vehicle.")
@@ -123,8 +126,8 @@ class Tower(object):
       self.vehicle.mode = dronekit.VehicleMode("STABILIZE")
       self.STATE = VehicleStates.landed
       self.vehicle_initialized = True
-      # self.failsafes = FailsafeController(self)
-      # self.failsafes.start()
+      self.failsafes = FailsafeController(self)
+      self.failsafes.start()
       self.start_time = time.time()
 
       self.switch_control()
@@ -132,7 +135,7 @@ class Tower(object):
       print("\nSuccessfully connected to vehicle.")
 
   def shutdown(self):    
-    # self.failsafes.join()
+    self.failsafes.join()
     self.vehicle.close()
     self.vehicle_initialized = False
     self.start_time = 0
@@ -148,9 +151,9 @@ class Tower(object):
       sleep(1)
 
   def switch_control(self):
-    # if not self.failsafes:
-    #   self.failsafes = FailsafeController(self)
-    #   self.failsafes.start()
+    if not self.failsafes:
+      self.failsafes = FailsafeController(self)
+      self.failsafes.start()
     if self.vehicle.mode.name != "GUIDED_NOGPS":
       self.vehicle.mode = dronekit.VehicleMode("GUIDED_NOGPS")
       while(self.vehicle.mode.name != "GUIDED_NOGPS"):
@@ -183,13 +186,13 @@ class Tower(object):
     self.last_attitude = attitude
     self.last_thrust = thrust
 
-  def get_drift_distance(self, sample_collection_time = HOVER_MAX_DRIFT_TIME):
+  def get_drift_distance(self):
     print("\nCollecting velocity samples...")
     samples = 0
     x_velocities = []
     y_velocities = []
 
-    while(samples < sample_collection_time * 1000):
+    while(samples < self.HOVER_VELOCITY_SAMPLES * 1000):
 
       velocity_x = self.vehicle.velocity[0]
       velocity_y = self.vehicle.velocity[1]
@@ -226,12 +229,9 @@ class Tower(object):
       drift_distance_y = drift_information[2]
 
       adjust_attitude = deepcopy(StandardAttitudes.level)
-        
-      corrected_distance_x = 0
-      corrected_distance_y = 0
-      corrected_distance = 0
 
-      correction_delta = drift_distance - corrected_distance
+      corrected_distance = 0
+      correction_delta = corrected_distance - drift_distance
 
       if(math.fabs(drift_distance_x) > self.HOVER_CIRCLE_RADIUS or math.fabs(drift_distance_y) > self.HOVER_CIRCLE_RADIUS):
         while(not (-self.DRIFT_CORRECT_THRESHOLD <= correction_delta <= self.DRIFT_CORRECT_THRESHOLD)):
@@ -263,21 +263,18 @@ class Tower(object):
 
           self.set_angle_thrust(adjust_attitude, StandardThrusts.hover)
 
-          corrected_information = self.get_drift_distance(2)
-          corrected_distance = corrected_information[0]
-          corrected_distance_x = corrected_information[1]
-          corrected_distance_y = corrected_information[2]
+          sleep(self.HOVER_MAX_DRIFT_TIME)
 
-          # corrected_distance_x = self.vehicle.velocity[0]
-          # corrected_distance_y = self.vehicle.velocity[1]
+          corrected_information = self.get_drift_distance()
+          corrected_distance += corrected_information[0]
+          correction_delta = corrected_distance - drift_distance
 
-          # if -self.ACCEL_NOISE_THRESHOLD <= corrected_distance_x <= self.ACCEL_NOISE_THRESHOLD:
-          #   corrected_distance_x = 0
-          # if -self.ACCEL_NOISE_THRESHOLD <= corrected_distance_y <= self.ACCEL_NOISE_THRESHOLD:
-          #   corrected_distance_y = 0
-
-          # corrected_distance += math.hypot(corrected_distance_x, corrected_distance_y)
-          correction_delta = drift_distance - corrected_distance
+          if(((correction_delta > 0) and (drift_distance > 0)) and math.fabs(correction_delta) > self.DRIFT_CORRECT_THRESHOLD):
+            drift_distance = correction_delta
+            drift_distance_x = corrected_information[1]
+            drift_distance_y = corrected_information[2]
+            corrected_distance = 0
+            correction_delta = corrected_distance - drift_distance
 
           print("\nCorrecting: " + str(corrected_distance) + " Drifted " + str(drift_distance))
           print("\nDrift X: " + str(drift_distance_x) + " Drift Y: " + str(drift_distance_y))
@@ -285,12 +282,9 @@ class Tower(object):
           print("\nVehicle Attitude: " + " Pitch: " + str(math.degrees(self.vehicle.attitude.pitch)) + " Roll: " + str(math.degrees(self.vehicle.attitude.roll)) + " Yaw: " + str(math.degrees(self.vehicle.attitude.pitch)))
           print("\nX m/s: " + str(self.vehicle.velocity[0]) + " Y m/s: " + str(self.vehicle.velocity[1]))
           print("\nAttitude Adjustments: " + "Roll: " + str(adjust_attitude.roll_deg) + " Pitch: " + str(adjust_attitude.pitch_deg) + " Yaw: " + str(adjust_attitude.yaw_deg))
-          # sleep(0.25)
-
-          system("clear")
 
       self.set_angle_thrust(StandardAttitudes.level, StandardThrusts.hover)
-      sleep(1)
+      sleep(self.HOVER_MAX_DRIFT_TIME)
       duration-=1
 
   def takeoff(self, target_altitude):
@@ -308,7 +302,7 @@ class Tower(object):
 
     print('Reached target altitude:{0:.2f}m'.format(self.vehicle.location.global_relative_frame.alt))
 
-    self.hover(10)
+    self.hover(5)
     self.land()
     self.set_angle_thrust(StandardAttitudes.level, StandardThrusts.hover)
 
@@ -365,6 +359,7 @@ class Tower(object):
 
   def land(self):
     self.vehicle.mode = dronekit.VehicleMode("LAND")
+    self.STATE = VehicleStates.landing
     while((self.vehicle.location.global_relative_frame.alt) >= self.LAND_ALTITUDE):
       sleep(1)
     else:
@@ -416,26 +411,27 @@ class Tower(object):
     pass
   
   def check_battery_voltage(self):
-    pass
+    if(self.vehicle.battery.voltage * 1000 < self.BATTERY_FAILSAFE_VOLTAGE):
+        self.land()
 
-# class FailsafeController(threading.Thread):
+class FailsafeController(threading.Thread):
 
-#   def __init__(self, atc_instance):
-#     self.atc = atc_instance
-#     self.stoprequest = threading.Event()
-#     super(FailsafeController, self).__init__()
+  def __init__(self, atc_instance):
+    self.atc = atc_instance
+    self.stoprequest = threading.Event()
+    super(FailsafeController, self).__init__()
 
-#   def run(self):
-#     while not self.stoprequest.isSet():
-#       if self.atc.STATE == VehicleStates.hover or self.atc.STATE == VehicleStates.flying:
-#         self.atc.check_sonar_sensors()
-#         self.atc.check_battery_voltage()
+  def run(self):
+    while not self.stoprequest.isSet():
+      if self.atc.STATE == VehicleStates.hover or self.atc.STATE == VehicleStates.flying:
+        self.atc.check_sonar_sensors()
+        self.atc.check_battery_voltage()
 
-#   def join(self, timeout=None):
-#     if self.atc.vehicle.armed:
-#       if self.atc.STATE != VehicleStates.landed:
-#         self.atc.land()
+  def join(self, timeout=None):
+    if self.atc.vehicle.armed:
+      if self.atc.STATE != VehicleStates.landed:
+        self.atc.land()
 
-#     self.stoprequest.set()
-#     super(FailsafeController, self).join(timeout)
+    self.stoprequest.set()
+    super(FailsafeController, self).join(timeout)
 
