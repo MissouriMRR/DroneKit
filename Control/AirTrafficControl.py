@@ -110,7 +110,13 @@ class Tower(object):
     self.STATE = VehicleStates.unknown
 
   def initialize(self):
-
+    """ 
+    @purpose: Connect to the flight controller, start the failsafe
+              thread, switch to GUIDED_NOGPS, and open a file to 
+              begin logging.
+    @args:
+    @returns:
+    """
     if(not self.vehicle_initialized):
 
       file = open('flight_log.txt', 'w')
@@ -135,22 +141,43 @@ class Tower(object):
       print("\nSuccessfully connected to vehicle.")
 
   def shutdown(self):    
+    """ 
+    @purpose: Stop all operations and cleanup the vehicle object.
+    @args:
+    @returns:
+    """
     self.failsafes.join()
     self.vehicle.close()
     self.vehicle_initialized = False
     self.start_time = 0
 
   def arm_drone(self):
+    """ 
+    @purpose: Arm the vehicle.
+    @args:
+    @returns:
+    """
     self.vehicle.armed = True
     while(not self.vehicle.armed):
       sleep(1)
   
   def disarm_drone(self):
+    """ 
+    @purpose: Disarm the vehicle.
+    @args:
+    @returns:
+    """
     self.vehicle.armed = False
     while(self.vehicle.armed):
       sleep(1)
 
   def switch_control(self):
+    """ 
+    @purpose: Switch the mode to GUIDED_NOGPS and make sure 
+             that the failsafe thread is running.
+    @args:
+    @returns:
+    """
     if not self.failsafes:
       self.failsafes = FailsafeController(self)
       self.failsafes.start()
@@ -160,13 +187,44 @@ class Tower(object):
         sleep(1)
 
   def get_uptime(self):
+    """ 
+    @purpose: Get up time of this object.
+    @args:
+    @returns:
+    """
     uptime = time.time() - self.start_time
     return uptime
 
   def constrain(self, x, in_min, in_max, out_min, out_max):
+    """ 
+    @purpose: Re-maps a number from one range to another.
+    
+    @args: 
+      x: the number to map
+      in_min: the lower bound of the value's current range
+      in_max: the upper bound of the value's current range
+      out_min: the lower bound of the value's target range
+      out_max: the upper bound of the value's target range
+
+    @returns:
+      The mapped value.
+    """
     return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min
 
   def set_angle_thrust(self, attitude, thrust):
+    """ 
+    @purpose: Send an specified attitude message to the
+              flight controller. For more information, see
+              http://mavlink.org/messages/common#SET_ATTITUDE_TARGET.
+    
+    @args: 
+      attitude: A DroneAtittude object containing a target attitude.
+      thrust: A collective thrust from 0 to 1. Thrust is converted to
+              a climb rate internally by the flight controller. Therefore, 
+              thrusts from 0.51 to 1 are climb rates and thrusts from 0.49
+              to 0 are descent rates. 0.50 attempts to maintain a hover.
+    @returns:
+    """
     while(self.vehicle.mode.name != "GUIDED_NOGPS"):
       sleep(1)
     
@@ -174,7 +232,7 @@ class Tower(object):
       0,                                 # Timestamp in milliseconds since system boot (not used).
       0,                                 # System ID
       0,                                 # Component ID
-      self.STANDARD_ATTITUDE_BIT_FLAGS,  # Bit flags. For more info, see http://mavlink.org/messages/common#SET_ATTITUDE_TARGET.
+      self.STANDARD_ATTITUDE_BIT_FLAGS,  # Bit flags. 
       attitude.quaternion,               # Attitude quaternion.
       0,                                 # Body roll rate.
       0,                                 # Body pitch rate.
@@ -187,6 +245,18 @@ class Tower(object):
     self.last_thrust = thrust
 
   def get_drift_distance(self):
+    """ 
+    @purpose: Collects the average velocity over time of the vehicle to
+              calculate a drift distance in the X and Y axis.
+    @args: 
+    @returns:
+      drift_distance: This is a combined drift from both axis in meters.
+                      It is the hypotenuse formed by the drift distances in the
+                      X and Y axis.
+      drift_distance_x: Drift distance in meters in the X axis. (Forward/Backward)
+      drift_distance_y: Drift distance in meters in the Y axis. (Left/Right)
+    """
+    
     print("\nCollecting velocity samples...")
     samples = 0
     x_velocities = []
@@ -237,28 +307,54 @@ class Tower(object):
         while(not (-self.DRIFT_CORRECT_THRESHOLD <= correction_delta <= self.DRIFT_CORRECT_THRESHOLD)):
 
           if(drift_distance_y > 0 and math.fabs(drift_distance_y) > self.HOVER_CIRCLE_RADIUS):
+
             adjust_attitude.roll_deg -= self.DRIFT_COMPENSATION
+
             if adjust_attitude.roll_deg < -self.MAX_DRIFT_COMPENSATION:
               adjust_attitude.roll_deg = -self.MAX_DRIFT_COMPENSATION
-            adjust_attitude = DroneAttitude(adjust_attitude.roll_deg, adjust_attitude.pitch_deg, adjust_attitude.yaw_deg)
+
+            adjust_attitude = DroneAttitude(adjust_attitude.roll_deg, 
+                                            adjust_attitude.pitch_deg, 
+                                            adjust_attitude.yaw_deg)
             print("\Drifted right, correcting left.")
+
           elif(drift_distance_y < 0 and math.fabs(drift_distance_y) > self.HOVER_CIRCLE_RADIUS):
+
             adjust_attitude.roll_deg += self.DRIFT_COMPENSATION
+
             if adjust_attitude.roll_deg > self.MAX_DRIFT_COMPENSATION:
               adjust_attitude.roll_deg = self.MAX_DRIFT_COMPENSATION
-            adjust_attitude = DroneAttitude(adjust_attitude.roll_deg, adjust_attitude.pitch_deg, adjust_attitude.yaw_deg)
+
+            adjust_attitude = DroneAttitude(adjust_attitude.roll_deg, 
+                                            adjust_attitude.pitch_deg, 
+                                            adjust_attitude.yaw_deg)
+
             print("\Drifted left, correcting right.")
+
           if(drift_distance_x > 0 and math.fabs(drift_distance_x) > self.HOVER_CIRCLE_RADIUS):
+
             adjust_attitude.pitch_deg += self.DRIFT_COMPENSATION
+
             if adjust_attitude.pitch_deg > self.MAX_DRIFT_COMPENSATION:
               adjust_attitude.pitch_deg = self.MAX_DRIFT_COMPENSATION
-            adjust_attitude = DroneAttitude(adjust_attitude.roll_deg, adjust_attitude.pitch_deg, adjust_attitude.yaw_deg)
+
+            adjust_attitude = DroneAttitude(adjust_attitude.roll_deg, 
+                                            adjust_attitude.pitch_deg, 
+                                            adjust_attitude.yaw_deg)
+
             print("\Drifted forward, correcting backwards.")
+
           elif(drift_distance_x < 0 and math.fabs(drift_distance_x) > self.HOVER_CIRCLE_RADIUS):
+
             adjust_attitude.pitch_deg -= self.DRIFT_COMPENSATION
+
             if adjust_attitude.pitch_deg < -self.MAX_DRIFT_COMPENSATION:
               adjust_attitude.pitch_deg = -self.MAX_DRIFT_COMPENSATION
-            adjust_attitude = DroneAttitude(adjust_attitude.roll_deg, adjust_attitude.pitch_deg, adjust_attitude.yaw_deg)
+
+            adjust_attitude = DroneAttitude(adjust_attitude.roll_deg, 
+                                            adjust_attitude.pitch_deg, 
+                                            adjust_attitude.yaw_deg)
+
             print("\Drifted backwards, correcting forward.")
 
           self.set_angle_thrust(adjust_attitude, StandardThrusts.hover)
@@ -269,7 +365,10 @@ class Tower(object):
           corrected_distance += corrected_information[0]
           correction_delta = corrected_distance - drift_distance
 
-          if(((correction_delta > 0) and (drift_distance > 0)) and math.fabs(correction_delta) > self.DRIFT_CORRECT_THRESHOLD):
+          if(((correction_delta > 0)) and math.fabs(correction_delta) > self.DRIFT_CORRECT_THRESHOLD):
+            """ Here we have overcompensated because the difference for the correction_delta is growing and the 
+                absolute value of the correction_delta is greater than the normal bound of DRIFT_CORRECT_THRESHOLD. 
+            """
             drift_distance = correction_delta
             drift_distance_x = corrected_information[1]
             drift_distance_y = corrected_information[2]
