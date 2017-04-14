@@ -94,9 +94,10 @@ class Tower(object):
   DRIFT_CORRECT_THRESHOLD = 0.05
   ACCEL_NOISE_THRESHOLD = 0.09
   MAX_DRIFT_COMPENSATION = 10.0
-  MAX_ANGLE_ALL_AXES = 20.0
+  MAX_ANGLE_ALL_AXIS = 20.0
   BATTERY_FAILSAFE_VOLTAGE = 10.25
   FAILSAFES_SLEEP_TIME = 0.1
+  STANDARD_SLEEP_TIME = 1
 
   def __init__(self):
     self.start_time = 0
@@ -194,7 +195,7 @@ class Tower(object):
     uptime = time.time() - self.start_time
     return uptime
 
-  def constrain(self, x, in_min, in_max, out_min, out_max):
+  def map(self, x, in_min, in_max, out_min, out_max):
     """ 
     @purpose: Re-maps a number from one range to another.
     
@@ -248,25 +249,25 @@ class Tower(object):
     self.STATE = VehicleStates.hover
     sleep(self.HOVER_DRIFT_TIME)
 
-  def turnaway(self)
-  adjust_attitude = deepcopy(StandardAttitudes.level)
-    sonar = Sonar.Sonar(2,3, "Main")
-    if (sonar.getDistance < sonar.SAFE_DISTANCE && sonar.getName == "Left"):
-      while (sonar.getDistance < sonar.SAFE_DISTANCE):
-        adjust_attitude = DroneAttitude(self.HOVER_ADJUST_DEG, adjust_attitude.pitch_deg, adjust_attitude.yaw_deg)
-        self.set_angle_thrust(adjust_attitude, StandardThrusts.hover)
-    if (sonar.getDistance < sonar.SAFE_DISTANCE && sonar.getName == "Right"):
-      while (sonar.getDistance < sonar.SAFE_DISTANCE):
-        adjust_attitude = DroneAttitude(-self.HOVER_ADJUST_DEG, adjust_attitude.pitch_deg, adjust_attitude.yaw_deg)
-        self.set_angle_thrust(adjust_attitude, StandardThrusts.hover)
-    #if (sonar.getDistance < sonar.SAFE_DISTANCE && sonar.getName == "Front"):
-      #while (sonar.getDistance < sonar.SAFE_DISTANCE):
-        #adjust_attitude = DroneAttitude(adjust_attitude.roll_deg, self.HOVER_ADJUST_DEG, adjust_attitude.yaw_deg)
-        #self.set_angle_thrust(adjust_attitude, StandardThrusts.hover)
-    #if (sonar.getDistance < sonar.SAFE_DISTANCE && sonar.getName == "Back"):
-      #while (sonar.getDistance < sonar.SAFE_DISTANCE):
-        #adjust_attitude = DroneAttitude(adjust_attitude.roll_deg, -self.HOVER_ADJUST_DEG, adjust_attitude.yaw_deg)
-        #self.set_angle_thrust(adjust_attitude, StandardThrusts.hover)
+  # def turnaway(self):
+  #   adjust_attitude = deepcopy(StandardAttitudes.level)
+  #   sonar = Sonar.Sonar(2,3, "Main")
+  #   if (sonar.getDistance < sonar.SAFE_DISTANCE and sonar.getName == "Left"):
+  #     while (sonar.getDistance < sonar.SAFE_DISTANCE):
+  #       adjust_attitude = DroneAttitude(self.STAN, adjust_attitude.pitch_deg, adjust_attitude.yaw_deg)
+  #       self.set_angle_thrust(adjust_attitude, StandardThrusts.hover)
+  #   if (sonar.getDistance < sonar.SAFE_DISTANCE and sonar.getName == "Right"):
+  #     while (sonar.getDistance < sonar.SAFE_DISTANCE):
+  #       adjust_attitude = DroneAttitude(-self.HOVER_ADJUST_DEG, adjust_attitude.pitch_deg, adjust_attitude.yaw_deg)
+  #       self.set_angle_thrust(adjust_attitude, StandardThrusts.hover)
+  #   if (sonar.getDistance < sonar.SAFE_DISTANCE and sonar.getName == "Front"):
+  #     while (sonar.getDistance < sonar.SAFE_DISTANCE):
+  #       adjust_attitude = DroneAttitude(adjust_attitude.roll_deg, self.HOVER_ADJUST_DEG, adjust_attitude.yaw_deg)
+  #       self.set_angle_thrust(adjust_attitude, StandardThrusts.hover)
+  #   if (sonar.getDistance < sonar.SAFE_DISTANCE and sonar.getName == "Back"):
+  #     while (sonar.getDistance < sonar.SAFE_DISTANCE):
+  #       adjust_attitude = DroneAttitude(adjust_attitude.roll_deg, -self.HOVER_ADJUST_DEG, adjust_attitude.yaw_deg)
+  #       self.set_angle_thrust(adjust_attitude, StandardThrusts.hover)
 
   def takeoff(self, target_altitude):
 
@@ -275,14 +276,11 @@ class Tower(object):
     self.arm_drone()
     self.switch_control()
 
-    while(self.vehicle.mode.name != "GUIDED_NOGPS"):
-      sleep(1)
-
     initial_alt = self.vehicle.location.global_relative_frame.alt
 
     while((self.vehicle.location.global_relative_frame.alt - initial_alt) < target_altitude):
       self.set_angle_thrust(StandardAttitudes.level, StandardThrusts.takeoff)
-      sleep(1)
+      sleep(self.STANDARD_SLEEP_TIME)
 
     print('Reached target altitude:{0:.2f}m'.format(self.vehicle.location.global_relative_frame.alt))
 
@@ -385,7 +383,7 @@ class Tower(object):
       else:
         max_angle = math.radians(desired_angle)
 
-      sleep(1)
+      sleep(self.STANDARD_SLEEP_TIME)
       
     self.fly_for_time(1, StandardAttitudes.forward, self.vehicle.airspeed, True)
     
