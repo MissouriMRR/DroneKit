@@ -14,7 +14,9 @@ from os import system
 import sys
 from time import sleep
 from copy import deepcopy
+from Collision import Sonar
 
+import RPi.GPIO as GPIO
 import dronekit
 import math
 import os
@@ -60,7 +62,7 @@ class StandardAttitudes(object):
   backward = DroneAttitude(0,5,0)
   left = DroneAttitude(-5, 0, 0)
   right = DroneAttitude(5, 0, 0)
-  
+
 class StandardThrusts(object):
   none = 0.00
   hover = 0.50
@@ -132,7 +134,7 @@ class Tower(object):
       self.failsafes = FailsafeController(self)
       self.failsafes.start()
       self.start_time = time.time()
-
+      
       self.switch_control()
       
       print("\nSuccessfully connected to vehicle.")
@@ -157,7 +159,7 @@ class Tower(object):
     self.vehicle.armed = True
     while(not self.vehicle.armed):
       sleep(1)
-  
+
   def disarm_drone(self):
     """ 
     @purpose: Disarm the vehicle.
@@ -246,15 +248,38 @@ class Tower(object):
     self.STATE = VehicleStates.hover
     sleep(self.HOVER_DRIFT_TIME)
 
+  def turnaway(self)
+  adjust_attitude = deepcopy(StandardAttitudes.level)
+    sonar = Sonar.Sonar(2,3, "Main")
+    if (sonar.getDistance < sonar.SAFE_DISTANCE && sonar.getName == "Left"):
+      while (sonar.getDistance < sonar.SAFE_DISTANCE):
+        adjust_attitude = DroneAttitude(self.HOVER_ADJUST_DEG, adjust_attitude.pitch_deg, adjust_attitude.yaw_deg)
+        self.set_angle_thrust(adjust_attitude, StandardThrusts.hover)
+    if (sonar.getDistance < sonar.SAFE_DISTANCE && sonar.getName == "Right"):
+      while (sonar.getDistance < sonar.SAFE_DISTANCE):
+        adjust_attitude = DroneAttitude(-self.HOVER_ADJUST_DEG, adjust_attitude.pitch_deg, adjust_attitude.yaw_deg)
+        self.set_angle_thrust(adjust_attitude, StandardThrusts.hover)
+    #if (sonar.getDistance < sonar.SAFE_DISTANCE && sonar.getName == "Front"):
+      #while (sonar.getDistance < sonar.SAFE_DISTANCE):
+        #adjust_attitude = DroneAttitude(adjust_attitude.roll_deg, self.HOVER_ADJUST_DEG, adjust_attitude.yaw_deg)
+        #self.set_angle_thrust(adjust_attitude, StandardThrusts.hover)
+    #if (sonar.getDistance < sonar.SAFE_DISTANCE && sonar.getName == "Back"):
+      #while (sonar.getDistance < sonar.SAFE_DISTANCE):
+        #adjust_attitude = DroneAttitude(adjust_attitude.roll_deg, -self.HOVER_ADJUST_DEG, adjust_attitude.yaw_deg)
+        #self.set_angle_thrust(adjust_attitude, StandardThrusts.hover)
+
   def takeoff(self, target_altitude):
+
+    self.STATE = VehicleStates.takeoff
+
     self.arm_drone()
-    self.vehicle.mode = dronekit.VehicleMode("GUIDED_NOGPS")
+    self.switch_control()
 
     while(self.vehicle.mode.name != "GUIDED_NOGPS"):
       sleep(1)
 
     initial_alt = self.vehicle.location.global_relative_frame.alt
-    
+
     while((self.vehicle.location.global_relative_frame.alt - initial_alt) < target_altitude):
       self.set_angle_thrust(StandardAttitudes.level, StandardThrusts.takeoff)
       sleep(1)
@@ -359,14 +384,16 @@ class Tower(object):
         max_angle = math.radians(desired_angle - self.STANDARD_ANGLE_ADJUSTMENT)
       else:
         max_angle = math.radians(desired_angle)
-    
+
       sleep(1)
       
     self.fly_for_time(1, StandardAttitudes.forward, self.vehicle.airspeed, True)
-
+    
   def check_sonar_sensors(self):
+    sonar = Sonar.Sonar(2,3, "Main")
+    print("%s Measured Distance = %.1f cm" % (sonar.getName(), sonar.getDistance()))
     pass
-  
+
   def check_battery_voltage(self):
     if(self.vehicle.battery.voltage < self.BATTERY_FAILSAFE_VOLTAGE):
         self.land()
@@ -393,5 +420,5 @@ class FailsafeController(threading.Thread):
         self.atc.land()
 
     self.stoprequest.set()
+    GPIO.cleanup()
     super(FailsafeController, self).join(timeout)
-
