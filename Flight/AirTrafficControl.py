@@ -91,7 +91,7 @@ class Tower(object):
   TURN_START_VELOCITY = 3
   TURN_RADIUS = 0.5 # Meters
   STANDARD_ANGLE_ADJUSTMENT = 1.0
-  HOVER_DRIFT_TIME = 1
+  HOVER_DRIFT_TIME = 0.1
   DRIFT_CORRECT_THRESHOLD = 0.05
   ACCEL_NOISE_THRESHOLD = 0.09
   MAX_DRIFT_COMPENSATION = 10.0
@@ -145,8 +145,16 @@ class Tower(object):
       print("\nSuccessfully connected to vehicle.")
 
   def initialize_pids(self):
-    pass
+    self.velocity_x_pid_pos = PID.PID(0.25, 0, 0, self.ACCEL_NOISE_THRESHOLD, Direction.reverse)
+    self.velocity_y_pid_pos = PID.PID(0.25, 0, 0, self.ACCEL_NOISE_THRESHOLD, Direction.reverse)
+    self.velocity_x_pid_pos.set_output_limits(0, 10)
+    self.velocity_y_pid_pos.set_output_limits(0, 10)
     
+    self.velocity_x_pid_neg = PID.PID(-0.25, 0, 0, self.ACCEL_NOISE_THRESHOLD, Direction.direct)
+    self.velocity_y_pid_neg = PID.PID(-0.25, 0, 0, self.ACCEL_NOISE_THRESHOLD, Direction.direct)
+    self.velocity_x_pid_neg.set_output_limits(-10, 0)
+    self.velocity_y_pid_neg.set_output_limits(-10, 0)
+
   def shutdown(self):    
     """ 
     @purpose: Stop all operations and cleanup the vehicle object.
@@ -257,7 +265,34 @@ class Tower(object):
   def hover(self):
     self.set_angle_thrust(StandardAttitudes.level, StandardThrusts.hover)
     self.STATE = VehicleStates.hover
-    sleep(self.HOVER_DRIFT_TIME)
+    
+    while((-self.ACCEL_NOISE_THRESHOLD <= self.vehicle.velocity[0] <= self.ACCEL_NOISE_THRESHOLD) and (-self.ACCEL_NOISE_THRESHOLD <= self.vehicle.velocity[1] <= self.ACCEL_NOISE_THRESHOLD)):
+      adjust_attitude = deepcopy(StandardAttitudes.level)
+      if(self.vehicle.velocity[0] < 0):
+        pid_x = self.velocity_x_pid_neg.compute(self.vehicle.velocity[0])
+        if(pid_x[1]):
+          adjust_attitude.pitch_deg = pid_x[0]
+      elif(self.vehicle.velocity[0] > 0):
+        pid_x = self.velocity_x_pid_pos.compute(self.vehicle.velocity[0])
+        if(pid_x[1]):
+          adjust_attitude.pitch_deg = pid_x[0]
+      
+      if(self.vehicle.velocity[1] < 0):
+        pid_y = self.velocity_y_pid_neg.compute(self.vehicle.velocity[1])
+        if(pid_y[1]):
+          adjust_attitude.roll_deg = pid_y[1]
+      elif(self.vehicle.velocity[1] > 0):
+        pid_y = self.velocity_y_pid_pos.compute(self.vehicle.velocity[1])
+        if(pid_y[1]):
+          adjust_attitude.roll_deg = pid_y[1]
+
+      adjust_attitude.pitch = math.radians(adjust_attitude.pitch_deg)
+      adjust_attitude.roll = math.radians(adjust_attitude.roll_deg)
+      adjust_attitude.quaternion = adjust_attitude.get_quaternion()
+
+      sleep(self.HOVER_DRIFT_TIME)
+
+
 
   # def turnaway(self):
   #   adjust_attitude = deepcopy(StandardAttitudes.level)
