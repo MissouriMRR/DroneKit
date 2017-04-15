@@ -66,11 +66,10 @@ class Sonar:
         return self.distance
 
 #delcaring two instances of Sonar object for testing
-rightSonar = Sonar(14, 15, "Right")
 leftSonar = Sonar(2, 3, "Left")
 
 #list of sonars
-sonars = [rightSonar, leftSonar]
+sonars = [leftSonar]
 if __name__ == '__main__':
     try:
         #Running code while true
