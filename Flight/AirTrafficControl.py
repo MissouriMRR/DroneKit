@@ -14,9 +14,10 @@ from os import system
 import sys
 from time import sleep
 from copy import deepcopy
-from Collision import Sonar
+from PID import PID, Mode, Direction
+# from Collision import Sonar
 
-import RPi.GPIO as GPIO
+# import RPi.GPIO as GPIO
 import dronekit
 import math
 import os
@@ -104,6 +105,8 @@ class Tower(object):
     self.flight_log = None
     self.vehicle_initialized = False
     self.vehicle = None
+    self.velocity_x_pid = None
+    self.velocity_y_pid = None
     self.LAST_ATTITUDE = StandardAttitudes.level
     self.LAST_THRUST = StandardThrusts.none
     self.STATE = VehicleStates.unknown
@@ -132,6 +135,7 @@ class Tower(object):
       self.vehicle.mode = dronekit.VehicleMode("STABILIZE")
       self.STATE = VehicleStates.landed
       self.vehicle_initialized = True
+      self.initialize_pids()
       self.failsafes = FailsafeController(self)
       self.failsafes.start()
       self.start_time = time.time()
@@ -140,6 +144,9 @@ class Tower(object):
       
       print("\nSuccessfully connected to vehicle.")
 
+  def initialize_pids(self):
+    pass
+    
   def shutdown(self):    
     """ 
     @purpose: Stop all operations and cleanup the vehicle object.
@@ -148,6 +155,9 @@ class Tower(object):
     """
     self.failsafes.join()
     self.vehicle.close()
+    self.flight_log.close()
+    self.velocity_x_pid = None
+    self.velocity_y_pid = None
     self.vehicle_initialized = False
     self.start_time = 0
 
@@ -307,23 +317,23 @@ class Tower(object):
       else:
         updated_attitude.pitch_deg = direction.pitch_deg
 
-      if(updated_attitude.pitch_deg < -self.MAX_ANGLE_ALL_AXES):
-        updated_attitude.pitch_deg = -self.MAX_ANGLE_ALL_AXES
+      if(updated_attitude.pitch_deg < -self.MAX_ANGLE_ALL_AXIS):
+        updated_attitude.pitch_deg = -self.MAX_ANGLE_ALL_AXIS
 
-      if(updated_attitude.pitch_deg > self.MAX_ANGLE_ALL_AXES):
-        updated_attitude.pitch_deg = self.MAX_ANGLE_ALL_AXES
+      if(updated_attitude.pitch_deg > self.MAX_ANGLE_ALL_AXIS):
+        updated_attitude.pitch_deg = self.MAX_ANGLE_ALL_AXIS
 
-      if(updated_attitude.roll_deg < -self.MAX_ANGLE_ALL_AXES):
-        updated_attitude.roll_deg = -self.MAX_ANGLE_ALL_AXES
+      if(updated_attitude.roll_deg < -self.MAX_ANGLE_ALL_AXIS):
+        updated_attitude.roll_deg = -self.MAX_ANGLE_ALL_AXIS
       
-      if(updated_attitude.roll_deg > self.MAX_ANGLE_ALL_AXES):
-        updated_attitude.roll_deg = self.MAX_ANGLE_ALL_AXES
+      if(updated_attitude.roll_deg > self.MAX_ANGLE_ALL_AXIS):
+        updated_attitude.roll_deg = self.MAX_ANGLE_ALL_AXIS
 
-      if(updated_attitude.yaw_deg < -self.MAX_ANGLE_ALL_AXES):
-        updated_attitude.yaw_deg = -self.MAX_ANGLE_ALL_AXES
+      if(updated_attitude.yaw_deg < -self.MAX_ANGLE_ALL_AXIS):
+        updated_attitude.yaw_deg = -self.MAX_ANGLE_ALL_AXIS
 
-      if(updated_attitude.yaw_deg > self.MAX_ANGLE_ALL_AXES):
-        updated_attitude.yaw_deg = self.MAX_ANGLE_ALL_AXES
+      if(updated_attitude.yaw_deg > self.MAX_ANGLE_ALL_AXIS):
+        updated_attitude.yaw_deg = self.MAX_ANGLE_ALL_AXIS
 
       updated_attitude.pitch = math.radians(updated_attitude.pitch_deg)
       updated_attitude.quaternion = updated_attitude.get_quaternion()
@@ -388,8 +398,8 @@ class Tower(object):
     self.fly_for_time(1, StandardAttitudes.forward, self.vehicle.airspeed, True)
     
   def check_sonar_sensors(self):
-    sonar = Sonar.Sonar(2,3, "Main")
-    print("%s Measured Distance = %.1f cm" % (sonar.getName(), sonar.getDistance()))
+    # sonar = Sonar.Sonar(2,3, "Main")
+    # print("%s Measured Distance = %.1f cm" % (sonar.getName(), sonar.getDistance()))
     pass
 
   def check_battery_voltage(self):
@@ -418,5 +428,5 @@ class FailsafeController(threading.Thread):
         self.atc.land()
 
     self.stoprequest.set()
-    GPIO.cleanup()
+    # GPIO.cleanup()
     super(FailsafeController, self).join(timeout)
