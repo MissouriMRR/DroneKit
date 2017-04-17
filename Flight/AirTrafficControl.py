@@ -446,6 +446,17 @@ class Tower(object):
   def check_sonar_sensors(self):
     # sonar = Sonar.Sonar(2,3, "Main")
     # print("%s Measured Distance = %.1f cm" % (sonar.getName(), sonar.getDistance()))
+#    message = vehicle.message.distance_sensor(
+#        0,
+#        6,
+#        200,
+#        sonar.getDistance(),
+#        MAV_DISTANCE_SENSOR_ULTRASOUND,
+#        158,
+#        180,
+#        0
+#    )
+
     pass
 
   def check_battery_voltage(self):
