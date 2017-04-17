@@ -145,13 +145,13 @@ class Tower(object):
       print("\nSuccessfully connected to vehicle.")
 
   def initialize_pids(self):
-    self.velocity_x_pid_pos = PID.PID(0.25, 0, 0, self.ACCEL_NOISE_THRESHOLD, Direction.reverse)
-    self.velocity_y_pid_pos = PID.PID(0.25, 0, 0, self.ACCEL_NOISE_THRESHOLD, Direction.reverse)
+    self.velocity_x_pid_pos = PID(0.25, 0.01, 0.5, self.ACCEL_NOISE_THRESHOLD, Direction.reverse)
+    self.velocity_y_pid_pos = PID(0.25, 0.01, 0.5, self.ACCEL_NOISE_THRESHOLD, Direction.reverse)
     self.velocity_x_pid_pos.set_output_limits(0, 10)
     self.velocity_y_pid_pos.set_output_limits(0, 10)
     
-    self.velocity_x_pid_neg = PID.PID(-0.25, 0, 0, self.ACCEL_NOISE_THRESHOLD, Direction.direct)
-    self.velocity_y_pid_neg = PID.PID(-0.25, 0, 0, self.ACCEL_NOISE_THRESHOLD, Direction.direct)
+    self.velocity_x_pid_neg = PID(0.25, 0.01, 0.5, self.ACCEL_NOISE_THRESHOLD, Direction.direct)
+    self.velocity_y_pid_neg = PID(0.25, 0.01, 0.5, self.ACCEL_NOISE_THRESHOLD, Direction.direct)
     self.velocity_x_pid_neg.set_output_limits(-10, 0)
     self.velocity_y_pid_neg.set_output_limits(-10, 0)
 
