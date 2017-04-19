@@ -89,15 +89,14 @@ class Tower(object):
   LAND_ALTITUDE = 0.5
   TURN_START_VELOCITY = 3
   TURN_RADIUS = 0.5 # Meters
-  STANDARD_ANGLE_ADJUSTMENT = 2.0
-  MESSAGE_WAIT_TIME = 0.1
+  STANDARD_ANGLE_ADJUSTMENT = 1.0
+  MESSAGE_WAIT_TIME = 0.01
   ACCEL_NOISE_THRESHOLD = 0.05
   MAX_ANGLE_ALL_AXIS = 15.0
-  BATTERY_FAILSAFE_VOLTAGE = 9.00
+  BATTERY_FAILSAFE_VOLTAGE = 9.25
   FAILSAFES_SLEEP_TIME = 0.1
   PID_STEP_SLEEP_TIME = 0.1
   STANDARD_SLEEP_TIME = 1
-  HOVER_CIRCLE_RADIUS = 0.5
 
   def __init__(self):
     self.start_time = 0
@@ -244,19 +243,15 @@ class Tower(object):
     self.vehicle.commands.upload()
     self.last_attitude = attitude
     self.last_thrust = thrust
-
-    sleep(self.MESSAGE_WAIT_TIME)
   
-  def hover(self, target_altitude, duration):
-    
+  def hover(self, duration=None):
+    end_manuever = datetime.now() + timedelta(seconds=duration)
     self.set_angle_thrust(StandardAttitudes.level, StandardThrusts.hover)
-    self.STATE = VehicleStates.hover
     adjust_attitude = deepcopy(StandardAttitudes.level)
-    thrust = deepcopy(StandardThrusts.hover)
+    self.STATE = VehicleStates.hover
 
-    duration = duration * 10
-
-    while(duration > 0):
+    while(datetime.now() < end_manuever):
+      sleep(self.PID_STEP_SLEEP_TIME)
 
       x_velocity = self.vehicle.velocity[0]
       y_velocity = self.vehicle.velocity[1]
@@ -319,21 +314,11 @@ class Tower(object):
 
           print("\Drifted backwards, correcting forward.")
 
-        if(self.vehicle.location.global_relative_frame.alt < target_altitude):
-          thrust = 0.55
-        elif(self.vehicle.location.global_relative_frame.alt > target_altitude):
-          thrust = 0.40
-        else:
-          thrust = deepcopy(StandardThrusts.hover)
-
-        self.set_angle_thrust(adjust_attitude, thrust)
+        self.set_angle_thrust(adjust_attitude, StandardThrusts.hover)
 
         print("\nVehicle Attitude: " + " Pitch: " + str(math.degrees(self.vehicle.attitude.pitch)) + " Roll: " + str(math.degrees(self.vehicle.attitude.roll)) + " Yaw: " + str(math.degrees(self.vehicle.attitude.pitch)))
         print("\nX m/s: " + str(x_velocity) + " Y m/s: " + str(y_velocity))
         print("\nAttitude Adjustments: " + "Roll: " + str(adjust_attitude.roll_deg) + " Pitch: " + str(adjust_attitude.pitch_deg) + " Yaw: " + str(adjust_attitude.yaw_deg))
-
-      sleep(self.PID_STEP_SLEEP_TIME)
-      duration-=1
 
   def takeoff(self, target_altitude):
 
@@ -350,7 +335,7 @@ class Tower(object):
 
     print('Reached target altitude:{0:.2f}m'.format(self.vehicle.location.global_relative_frame.alt))
 
-    self.hover(target_altitude, 10)
+    self.hover(10)
     self.land()
 
   def fly_for_time(self, duration, direction, target_velocity, should_hover_on_finish):
@@ -457,17 +442,16 @@ class Tower(object):
   def check_sonar_sensors(self):
     # sonar = Sonar.Sonar(2,3, "Main")
     # print("%s Measured Distance = %.1f cm" % (sonar.getName(), sonar.getDistance()))
-#    message = vehicle.message.distance_sensor(
-#        0,
-#        6,
-#        200,
-#        sonar.getDistance(),
-#        MAV_DISTANCE_SENSOR_ULTRASOUND,
-#        158,
-#        180,
-#        0
-#    )
-
+    # message = vehicle.message.distance_sensor(
+    #     0,
+    #     6,
+    #     200,
+    #     sonar.getDistance(),
+    #     MAV_DISTANCE_SENSOR_ULTRASOUND,
+    #     158,
+    #     180,
+    #     0
+    # )
     pass
 
   def check_battery_voltage(self):
