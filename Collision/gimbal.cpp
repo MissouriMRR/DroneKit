@@ -18,6 +18,7 @@ const char * device = "/dev/ttyACM0";  // Linux
 //the servo to counter the pitch of the drone
 int pitch = 0;
 int roll = 1;
+int fd = 0;
 const int PARALLEL = 50; //45 allows for 30 degrees of + and - with ease
 const int PERPENDICULAR = PARALLEL + 90; 
 
@@ -28,7 +29,7 @@ const int SPEED = 10;
 // See the "Serial Servo Commands" section of the user's guide.
 int maestroGetPosition(int fd, unsigned char channel)
 {
-  /*
+
   unsigned char command[] = {0x90, channel};
   if(write(fd, command, sizeof(command)) == -1)
   {
@@ -42,17 +43,17 @@ int maestroGetPosition(int fd, unsigned char channel)
     perror("error reading");
     return -1;
   }
-  */
+  
   return response[0] + 256*response[1];
 }
 
 // Sets the target of a Maestro channel.
 // See the "Serial Servo Commands" section of the user's guide.
 // The units of 'target' are quarter-microseconds.
-int maestroSetTarget(int serialControl, unsigned char channel, unsigned short target)
+int maestroSetTarget(int fd, unsigned char channel, unsigned short target)
 {
   unsigned char command[] = {0x84, channel, target & 0x7F, target >> 7 & 0x7F};
-  if (write(serialControl, command, sizeof(command)) == -1)
+  if (write(fd, command, sizeof(command)) == -1)
   {
     perror("error writing");
     return -1;
@@ -80,22 +81,24 @@ void mntn(int isPLL, int rAdj, int pAdj);
 
 void setup() 
 {
+  fd = open(device, O_RDWR | O_NOCTTY);
+  
   /*
-  if (serialControl == -1)
+  if (fd == -1)
   {
     perror(device);
     return 1;
   }
   */
   #ifdef _WIN32
-    _setmode(serialControl, _O_BINARY);
+    _setmode(fd, _O_BINARY);
   #else
     struct termios options;
-    tcgetattr(serialControl, &options);
+    tcgetattr(fd, &options);
     options.c_iflag &= ~(INLCR | IGNCR | ICRNL | IXON | IXOFF);
     options.c_oflag &= ~(ONLCR | OCRNL);
     options.c_lflag &= ~(ECHO | ECHONL | ICANON | ISIG | IEXTEN);
-    tcsetattr(serialControl, TCSANOW, &options);
+    tcsetattr(fd, TCSANOW, &options);
   #endif  
 
   goToAngle(50, 40, SPEED); //sets the gimbal to parallel as default
@@ -114,14 +117,12 @@ void main()
 {
   //used to track parallel or perpendicular
   static int isParallel = 1;
-  
-  int serialControl = open(device, O_RDWR | O_NOCTTY);
-  
+    
   if (Serial.available())
   {
     //allows yChange to default to the previous value. If input is invalid the gimbal doesn't move.
-    int pChange = maestroGetPosition(serialControl, pitch);
-    int rChange = maestroGetPosition(serialControl, roll);
+    int pChange = maestroGetPosition(fd, pitch);
+    int rChange = maestroGetPosition(fd, roll);
     
     //if SIGUSR1 is sent, allows the gimbal to switch orientation
     if (sig_handler(SIGUSR1) == 1) 
@@ -157,13 +158,13 @@ void mntn(int isPLL, int rAdj, int pAdj)
 
 void goToAngle(int pitchAngle, int rollAngle, int speed)
 {
-  int currentPAngle = maestroGetPosition(serialControl, pitch);
-  int currentRAngle = maestroGetPosition(serialControl, roll);
+  int currentPAngle = maestroGetPosition(fd, pitch);
+  int currentRAngle = maestroGetPosition(fd, roll);
   if(pitchAngle > currentPAngle)
   {
     for (int i = currentPAngle; i < pitchAngle; i++)
     {
-      maestroSetTarget(serialControl, pitch, i);
+      maestroSetTarget(fd, pitch, i);
       sleep(speed);
     }
   }
@@ -171,7 +172,7 @@ void goToAngle(int pitchAngle, int rollAngle, int speed)
   {
     for (int i = currentPAngle; i > pitchAngle; i--)
     {
-      maestroSetTarget(serialControl, pitch, i);
+      maestroSetTarget(fd, pitch, i);
       sleep(speed);
     }
   }
@@ -180,7 +181,7 @@ void goToAngle(int pitchAngle, int rollAngle, int speed)
   {
     for (int i = currentRAngle; i < rollAngle; i++)
     {
-      maestroSetTarget(serialControl, roll, i);
+      maestroSetTarget(fd, roll, i);
       sleep(speed);
     }
   }
@@ -188,7 +189,7 @@ void goToAngle(int pitchAngle, int rollAngle, int speed)
   {
     for (int i = currentRAngle; i > rollAngle; i--)
     {
-      maestroSetTarget(serialControl, roll, i);
+      maestroSetTarget(fd, roll, i);
       sleep(speed);
     }
   }
