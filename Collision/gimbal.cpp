@@ -99,18 +99,18 @@ void setup()
 
 }
 
-bool sig_handler(int signo)
+int sig_handler(int signo)
 {
   if (signo == SIGUSR1)
   {
-    return true;
+    return 1;
   }
 }
 
 void main() 
 {
   //used to track parallel or perpendicular
-  static int isParallel = true;
+  static int isParallel = 1;
   
   int serialControl = open(device, O_RDWR | O_NOCTTY);
   
@@ -121,7 +121,7 @@ void main()
     int rChange = maestroGetPosition(serialControl, roll);
     
     //if SIGUSR1 is sent, allows the gimbal to switch orientation
-    if (sig_handler(SIGUSR1)) 
+    if (sig_handler(SIGUSR1) == 1) 
     {
       if (isParallel == 1)
         isParallel = 0;
