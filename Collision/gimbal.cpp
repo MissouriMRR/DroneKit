@@ -61,10 +61,10 @@ int maestroSetTarget(int serialControl, unsigned char channel, unsigned short ta
 
 /*
  * @parameters
- *  byte angle -> the angle you want to go to
+ *  int angle -> the angle you want to go to
  *  int speed -> the sleep between a move of 1 degree (lower is faster)
  */
-void goToAngle(byte pitchAngle, byte rollAngle, int speed);
+void goToAngle(int pitchAngle, int rollAngle, int speed);
 
 /*
  * @parameters
@@ -75,7 +75,7 @@ void goToAngle(byte pitchAngle, byte rollAngle, int speed);
  * int yAdj -> pass a positive or negative value to adjust the forward-backward axis of the gimbal
  *             (modifies pitch)
  */
-void mntn(bool isPLL, byte rAdj, byte pAdj);
+void mntn(bool isPLL, int rAdj, int pAdj);
 
 void setup() 
 {
@@ -100,36 +100,38 @@ void setup()
 
 }
 
-bool sig_handler(int signo, byte & p, byte & r, bool & change)
+bool sig_handler(int signo)
 {
   if (signo == SIGUSR1)
   {
-    change = !change;
-    p = 0;
-    r = 0;
+    return true;
   }
 }
 
 void main() 
 {
   //used to track parallel or perpendicular
-  static boolean isParallel = true;
+  static bool isParallel = true;
   
   if (Serial.available())
   {
     //allows yChange to default to the previous value. If input is invalid the gimbal doesn't move.
-    byte pChange = maestroGetPosition(serialControl, pitch);
-    byte rChange = maestroGetPosition(serialControl, roll);
+    int pChange = maestroGetPosition(serialControl, pitch);
+    int rChange = maestroGetPosition(serialControl, roll);
     
     //if SIGUSR1 is sent, allows the gimbal to switch orientation
-    if (sig_handler(SIGUSR1, pChange, rChange, isParallel)) 
-      {}
+    if (sig_handler(SIGUSR1)) 
+    {
+      isParallel = !isParallel;
+      p = 0;
+      r = 0;
+    }
     else
       mntn(isParallel, rChange, pChange);
   }
 }
 
-void mntn(bool isPLL, byte rAdj, byte pAdj)
+void mntn(bool isPLL, int rAdj, int pAdj)
 {
   //sets the new angle equal to the change from the old angle
   //runs if the gimbal needs to be parallel to the ground
@@ -147,10 +149,10 @@ void mntn(bool isPLL, byte rAdj, byte pAdj)
 }
 
 
-void goToAngle(byte pitchAngle, byte rollAngle, int speed)
+void goToAngle(int pitchAngle, int rollAngle, int speed)
 {
-  byte currentPAngle = maestroGetPosition(serialControl, pitch);
-  byte currentRAngle = maestroGetPosition(serialControl, roll);
+  int currentPAngle = maestroGetPosition(serialControl, pitch);
+  int currentRAngle = maestroGetPosition(serialControl, roll);
   if(pitchAngle > currentPAngle)
   {
     for (int i = currentPAngle; i < pitchAngle; i++)
