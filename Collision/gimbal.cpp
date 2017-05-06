@@ -13,7 +13,6 @@
 //const char * device = "\\\\.\\USBSER000";  // Windows, "\\\\.\\COM6" also works
 const char * device = "/dev/ttyACM0";  // Linux
 //const char * device = "/dev/cu.usbmodem00034567";  // Mac OS X
-int serialControl = open(device, O_RDWR | O_NOCTTY);
 
 //the servo to counter the pitch of the drone
 int pitch = 0;
@@ -75,7 +74,7 @@ void goToAngle(int pitchAngle, int rollAngle, int speed);
  * int yAdj -> pass a positive or negative value to adjust the forward-backward axis of the gimbal
  *             (modifies pitch)
  */
-void mntn(bool isPLL, int rAdj, int pAdj);
+void mntn(int isPLL, int rAdj, int pAdj);
 
 void setup() 
 {
@@ -111,7 +110,9 @@ bool sig_handler(int signo)
 void main() 
 {
   //used to track parallel or perpendicular
-  static bool isParallel = true;
+  static int isParallel = true;
+  
+  int serialControl = open(device, O_RDWR | O_NOCTTY);
   
   if (Serial.available())
   {
@@ -122,26 +123,29 @@ void main()
     //if SIGUSR1 is sent, allows the gimbal to switch orientation
     if (sig_handler(SIGUSR1)) 
     {
-      isParallel = !isParallel;
-      p = 0;
-      r = 0;
+      if (isParallel == 1)
+        isParallel = 0;
+      else
+        isParallel = 1;
+      pChange = 0;
+      rChange = 0;
     }
     else
       mntn(isParallel, rChange, pChange);
   }
 }
 
-void mntn(bool isPLL, int rAdj, int pAdj)
+void mntn(int isPLL, int rAdj, int pAdj)
 {
   //sets the new angle equal to the change from the old angle
   //runs if the gimbal needs to be parallel to the ground
   rAdj += 40;
-  if (isPLL)
+  if (isPLL == 1)
   {
     pAdj += PARALLEL;
     goToAngle(pAdj, rAdj, SPEED);
   }
-  else if (!isPLL)
+  else
   {
     pAdj += PERPENDICULAR;
     goToAngle(pAdj, rAdj, SPEED);
