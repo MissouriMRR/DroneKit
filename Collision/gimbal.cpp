@@ -25,17 +25,17 @@ const int SPEED = 10;
 
 // Gets the position of a Maestro channel.
 // See the "Serial Servo Commands" section of the user's guide.
-int maestroGetPosition(int serialControl, unsigned char channel)
+int maestroGetPosition(int fd, unsigned char channel)
 {
   unsigned char command[] = {0x90, channel};
-  if(write(serialControl, command, sizeof(command)) == -1)
+  if(write(fd, command, sizeof(command)) == -1)
   {
     perror("error writing");
     return -1;
   }
  
   unsigned char response[2];
-  if(read(serialControl,response,2) != 2)
+  if(read(fd,response,2) != 2)
   {
     perror("error reading");
     return -1;
