@@ -8,6 +8,7 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <termios.h>
+#include <signal.h>
 
 // Open the Maestro's virtual COM port.
 //const char * device = "\\\\.\\USBSER000";  // Windows, "\\\\.\\COM6" also works
@@ -27,6 +28,7 @@ const int SPEED = 10;
 // See the "Serial Servo Commands" section of the user's guide.
 int maestroGetPosition(int fd, unsigned char channel)
 {
+  /*
   unsigned char command[] = {0x90, channel};
   if(write(fd, command, sizeof(command)) == -1)
   {
@@ -40,7 +42,7 @@ int maestroGetPosition(int fd, unsigned char channel)
     perror("error reading");
     return -1;
   }
- 
+  */
   return response[0] + 256*response[1];
 }
 
@@ -78,12 +80,13 @@ void mntn(int isPLL, int rAdj, int pAdj);
 
 void setup() 
 {
+  /*
   if (serialControl == -1)
   {
     perror(device);
     return 1;
   }
- 
+  */
   #ifdef _WIN32
     _setmode(serialControl, _O_BINARY);
   #else
@@ -152,7 +155,6 @@ void mntn(int isPLL, int rAdj, int pAdj)
   }
 }
 
-
 void goToAngle(int pitchAngle, int rollAngle, int speed)
 {
   int currentPAngle = maestroGetPosition(serialControl, pitch);
@@ -191,4 +193,3 @@ void goToAngle(int pitchAngle, int rollAngle, int speed)
     }
   }
 }
-
