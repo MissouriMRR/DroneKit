@@ -12,7 +12,7 @@ TWELVE_NET_FILE_NAME = '12net.hdf'
 WINDOW_TITLE = '12_net_test'
 TEST = False
 
-train(TWELVE_NET_FILE_NAME, 12)
+train(TWELVE_NET_FILE_NAME, 12, False)
 
 if TEST:
     import keras

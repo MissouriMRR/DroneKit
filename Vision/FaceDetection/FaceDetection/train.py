@@ -49,7 +49,7 @@ def train_classifier(saveFileName, scale, numEpochs, X_train, y_train, X_test, y
     return (hist, model.evaluate(X_test, y_test, verbose=0))
 
     
-def train(saveFileName, scale, numEpochs = NUM_EPOCHS, verbose = True):
+def train(saveFileName, scale, verbose = True, numEpochs = NUM_EPOCHS):
     if not os.path.exists(TRAIN_DATABASE_PATH):
         createTrainingDataset(scale)
 
