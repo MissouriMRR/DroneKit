@@ -6,13 +6,13 @@ import cv2
 import numpy as np
 
 from data import MIN_FACE_SCALE, OFFSET
-#from train import train
+from train import train
 
 TWELVE_NET_FILE_NAME = '12net.hdf'
 WINDOW_TITLE = '12_net_test'
-TEST = True
+TEST = False
 
-#train(TWELVE_NET_FILE_NAME, 12)
+train(TWELVE_NET_FILE_NAME, 12)
 
 if TEST:
     import keras
