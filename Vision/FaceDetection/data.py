@@ -3,7 +3,6 @@ import random
 import cv2
 import numpy as np
 import os
-import data
 
 from crop import crop, cropOutROIs
 from annotation import RectangleAnnotation, EllipseAnnotation, getFaceAnnotations, ANNOTATIONS_FOLDER, POSITIVE_IMAGES_FOLDER
@@ -17,6 +16,12 @@ MIN_FACE_SCALE = 50
 OFFSET = 4
 
 SCALES = ((12,12),(24,24),(48,48))
+
+CALIBRATION_DATABASE_PATHS = {SCALES[0][0]:'calib12.hdf',SCALES[1][0]:'calib24.hdf',SCALES[2][0]:'calib48.hdf'}
+TARGET_NUM_CALIBRATION_SAMPLES = 5000
+SN = (.83, .91, 1, 1.1, 1.21)
+XN = (-.17, 0, .17)
+YN = XN
 
 def loadDatabase(databasePath, isNegativeDataset = False):
     db = None
@@ -89,17 +94,60 @@ def createDatabase(databasePaths, loadFunc, scales = SCALES):
             w, h = SCALES[i]
             out.create_dataset(databasePath[:databasePath.find('.')], data = loadFunc(w,h), chunks=(32,w,h,3))
 
-def createNegativeDatabase(scales = SCALES):
+def createNegativeDatabase():
     createDatabase(NEGATIVE_DATABASE_PATHS, lambda w, h: getNegatives(w,h))
 
-def createFaceDatabase(faces, scales = SCALES):
+def createFaceDatabase(faces):
     createDatabase(FACE_DATABASE_PATHS, lambda w, h, faces = faces: cropOutROIs(faces, w, h))
 
+def _createCalibrationDataset(faces, scale = SCALES[0][0], numCalibrationSamples = TARGET_NUM_CALIBRATION_SAMPLES):
+    imgDtype = loadDatabase('face%d.hdf' % scale)[0].dtype
+    numCalibPatterns = len(SN)*len(XN)*len(YN)
+    calibDbLen = numCalibrationSamples * numCalibPatterns
+
+    db = np.ones((calibDbLen, scale, scale, 3), imgDtype)
+    y = np.ones((calibDbLen,1))
+
+    i = 0
+    j = 0
+    posImgPaths = tuple(faces.keys())
+    calibPattterns = [(sn, xn, yn) for sn in SN for xn in XN for yn in YN]
+
+    with h5py.File(CALIBRATION_DATABASE_PATHS.get(scale), 'w') as out:
+        while i < calibDbLen and j < len(posImgPaths):
+            img = cv2.imread(posImgPaths[j])
+            
+            for annotation in faces.getAnnotations(posImgPaths[j]):
+                for n, (sn, xn, yn) in enumerate(calibPattterns):
+                    dim = np.array([annotation.w, annotation.h])
+                    top_left = annotation.top_left + (np.array([xn, yn])*dim).astype(int)
+                    dim = (dim*sn).astype(int)
+                    cropped = crop(img, top_left, top_left + dim, scale, scale)
+
+                    if cropped is not None:
+                        db[i] = cropped
+                        y[i] = n
+                        i += 1
+            j += 1
+        
+        if i < calibDbLen:
+            np.delete(y, np.s_[i:], 0)
+            np.delete(db, np.s_[i:], 0)
+
+        out.create_dataset('labels', data=y, chunks=(32,1))
+        out.create_dataset('data', data=db, chunks=(32, scale, scale, 3))
+
+def createCalibrationDatabase(scale = SCALES):
+    faces = getFaceAnnotations()
+    for (w, h) in SCALES:
+        _createCalibrationDataset(faces, w)
+
+
 def createTrainingDataset(scale = SCALES[0][0]):
-    pos_db = data.loadDatabase('face%d.hdf' % scale)
-    neg_db = data.loadDatabase('neg%d.hdf' % scale)
+    pos_db = loadDatabase('face%d.hdf' % scale)
+    neg_db = loadDatabase('neg%d.hdf' % scale)
     img_dtype = pos_db[0].dtype
-    y = np.vstack((np.ones((len(pos_db),1),dtype=img_dtype),np.zeros((len(neg_db),1),dtype=img_dtype)))
+    y = np.vstack((np.ones((len(pos_db),1),dtype=img_dtype),np.zeros((len(neg_db),1))))
     db = np.vstack((pos_db,neg_db))
     
     perm = np.random.permutation(db.shape[0])

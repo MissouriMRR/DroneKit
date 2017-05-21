@@ -5,7 +5,7 @@ import math
 
 from crop import crop
 
-RED = (0,0,255)
+GREEN = (0,255,0)
 
 ANNOTATIONS_FOLDER = r'Annotated Faces in the Wild/FDDB-folds'
 ANNOTATION_FILE_NAME_ID = 'ellipseList.txt'
@@ -25,7 +25,7 @@ class RectangleAnnotation( ):
         self.bottom_right = np.array([self.center_x + self.dx, self.center_y + self.dy])
         self.area = w*h
 
-    def draw( self, mat, color = RED, thickness = 3):
+    def draw( self, mat, color = GREEN, thickness = 3):
         cv2.rectangle(mat, tuple(self.top_left), tuple(self.bottom_right), color, thickness)
 
     def cropOut( self, mat, newW = None, newH = None ):
@@ -48,10 +48,10 @@ class EllipseAnnotation( ):
         self.center_x = int(float(center_x))
         self.center_y = int(float(center_y))
 
-    def draw( self, mat, color = RED, thickness = 3):
+    def draw( self, mat, color = GREEN, thickness = 3):
         cv2.ellipse(mat, (self.center_x, self.center_y), (self.major_axis, self.minor_axis), math.degrees(self.angle), 0, 360, color, thickness)
 
-    def drawAsRect( self, mat, color = RED, thickness = 3):
+    def drawAsRect( self, mat, color = GREEN, thickness = 3):
         self.toRect().draw(mat)
 
     def toRect( self ):
