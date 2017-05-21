@@ -100,7 +100,7 @@ def createNegativeDatabase():
 def createFaceDatabase(faces):
     createDatabase(FACE_DATABASE_PATHS, lambda w, h, faces = faces: cropOutROIs(faces, w, h))
 
-def _createCalibrationDataset(faces, scale = SCALES[0][0], numCalibrationSamples = TARGET_NUM_CALIBRATION_SAMPLES):
+def createCalibrationDataset(faces, scale = SCALES[0][0], numCalibrationSamples = TARGET_NUM_CALIBRATION_SAMPLES):
     imgDtype = loadDatabase('face%d.hdf' % scale)[0].dtype
     numCalibPatterns = len(SN)*len(XN)*len(YN)
     calibDbLen = numCalibrationSamples * numCalibPatterns

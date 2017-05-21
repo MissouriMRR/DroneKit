@@ -10,6 +10,7 @@ from data import MIN_FACE_SCALE, OFFSET, SCALES
 from annotation import RectangleAnnotation
 
 TWELVE_NET_FILE_NAME = '12net.hdf'
+TWELVE_CALIB_NET_FILE_NAME = '12calibnet.hdf'
 
 def numDetectionWindowsAlongAxis(size):
     return (size-12)//OFFSET+1
@@ -17,7 +18,6 @@ def numDetectionWindowsAlongAxis(size):
 def load_12net():
     classifier = build12net()
     classifier.load_weights(TWELVE_NET_FILE_NAME)
-    classifier.compile(loss='categorical_crossentropy', optimizer=Adam(), metrics=['accuracy'])
     return classifier
 
 classifier = None

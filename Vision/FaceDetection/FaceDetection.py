@@ -3,12 +3,13 @@ from visualize import cv2Window
 
 import cv2
 
-
 WINDOW_TITLE = '12_net_test'
 TEST = False
-TRAIN = False
 
-data.createCalibrationDatabase()
+from detect import TWELVE_CALIB_NET_FILE_NAME, TWELVE_NET_FILE_NAME
+TRAIN = True
+TRAIN_CALIB = True
+TRAIN_CLASSIFIER = False
 
 if __name__ == '__main__':
     if TEST:
@@ -39,5 +40,9 @@ if __name__ == '__main__':
 
     elif TRAIN:
         from train import train
-        train(TWELVE_NET_FILE_NAME, 12, False)
+
+        if TRAIN_CLASSIFIER:
+            train(TWELVE_NET_FILE_NAME, 12, False)
+        if TRAIN_CALIB:
+            train(TWELVE_CALIB_NET_FILE_NAME, 12, True, True)
     
