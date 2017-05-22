@@ -24,6 +24,12 @@ class RectangleAnnotation( ):
         self.top_left = np.array([self.center_x - self.dx, self.center_y - self.dy])
         self.bottom_right = np.array([self.center_x + self.dx, self.center_y + self.dy])
         self.area = w*h
+    
+    def applyTransform( self, sn, xn, yn ):
+        newDim = np.array([self.w,self.h])/sn
+        newTopLeft = self.top_left - np.array([xn,yn])*newDim
+        (w, h) = newDim.astype(int)
+        self.__init__(w, h, *((newTopLeft+newDim//2).astype(int)))
 
     def draw( self, mat, color = GREEN, thickness = 3):
         cv2.rectangle(mat, tuple(self.top_left), tuple(self.bottom_right), color, thickness)

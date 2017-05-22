@@ -4,10 +4,10 @@ from visualize import cv2Window
 import cv2
 
 WINDOW_TITLE = '12_net_test'
-TEST = False
+TEST = True
 
 from detect import TWELVE_CALIB_NET_FILE_NAME, TWELVE_NET_FILE_NAME
-TRAIN = True
+TRAIN = False
 TRAIN_CALIB = True
 TRAIN_CLASSIFIER = False
 

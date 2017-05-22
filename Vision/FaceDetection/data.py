@@ -22,6 +22,7 @@ TARGET_NUM_CALIBRATION_SAMPLES = 5000
 SN = (.83, .91, 1, 1.1, 1.21)
 XN = (-.17, 0, .17)
 YN = XN
+CALIB_PATTERNS = [(sn, xn, yn) for sn in SN for xn in XN for yn in YN]
 
 def loadDatabase(databasePath, isNegativeDataset = False):
     db = None
@@ -111,14 +112,13 @@ def createCalibrationDataset(faces, scale = SCALES[0][0], numCalibrationSamples 
     i = 0
     j = 0
     posImgPaths = tuple(faces.keys())
-    calibPattterns = [(sn, xn, yn) for sn in SN for xn in XN for yn in YN]
 
     with h5py.File(CALIBRATION_DATABASE_PATHS.get(scale), 'w') as out:
         while i < calibDbLen and j < len(posImgPaths):
             img = cv2.imread(posImgPaths[j])
             
             for annotation in faces.getAnnotations(posImgPaths[j]):
-                for n, (sn, xn, yn) in enumerate(calibPattterns):
+                for n, (sn, xn, yn) in enumerate(CALIB_PATTERNS):
                     dim = np.array([annotation.w, annotation.h])
                     top_left = annotation.top_left + (np.array([xn, yn])*dim).astype(int)
                     dim = (dim*sn).astype(int)

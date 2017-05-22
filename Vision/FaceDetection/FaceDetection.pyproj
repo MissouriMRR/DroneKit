@@ -31,6 +31,9 @@
     <Compile Include="data.py">
       <SubType>Code</SubType>
     </Compile>
+    <Compile Include="detect.py">
+      <SubType>Code</SubType>
+    </Compile>
     <Compile Include="FaceDetection.py" />
     <Compile Include="train.py">
       <SubType>Code</SubType>
