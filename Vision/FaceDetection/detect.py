@@ -88,7 +88,7 @@ def stage1_predict(mat):
             rois[i] = resized[top_left[1]:top_left[1]+scale,top_left[0]:top_left[0]+scale]
             i += 1
     
-    posDetectionIndices = np.where(classifier.predict(rois)[:,1]>=.5)
+    posDetectionIndices = np.where(classifier.predict(rois/255)[:,1]>=.5)
     numDetections = posDetectionIndices[0].shape[0]
     detections = np.ones((numDetections, scale, scale, 3), resized.dtype)
     coords *= MIN_FACE_SCALE//scale
@@ -99,8 +99,9 @@ def stage1_predict(mat):
         cropped = posDetections[-1].cropOut(mat, scale, scale)
         detections[j] = cropped
 
-    calibPredictions = np.argmax(calibrator.predict(detections), 1)
-    for j, calibIdx in enumerate(calibPredictions):
-        posDetections[j].applyTransform(*CALIB_PATTERNS[calibIdx])
+    if len(detections) > 0:
+        calibPredictions = np.argmax(calibrator.predict(detections), 1)
+        for j, calibIdx in enumerate(calibPredictions):
+            posDetections[j].applyTransform(*CALIB_PATTERNS[calibIdx])
 
     return nms(posDetections,OVERLAP_THRESH)
