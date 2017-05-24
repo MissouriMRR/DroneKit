@@ -12,7 +12,7 @@ from annotation import RectangleAnnotation
 TWELVE_NET_FILE_NAME = '12net.hdf'
 TWELVE_CALIB_NET_FILE_NAME = '12calibnet.hdf'
 
-OVERLAP_THRESH = .4
+OVERLAP_THRESH = .5
 
 def numDetectionWindowsAlongAxis(size):
     return (size-12)//OFFSET+1

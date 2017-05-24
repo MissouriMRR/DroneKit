@@ -8,8 +8,8 @@ TEST = True
 
 from detect import TWELVE_CALIB_NET_FILE_NAME, TWELVE_NET_FILE_NAME
 TRAIN = False
-TRAIN_CALIB = True
-TRAIN_CLASSIFIER = False
+TRAIN_CALIB = False
+TRAIN_CLASSIFIER = True
 
 if __name__ == '__main__':
     if TEST:
