@@ -23,6 +23,7 @@ class RectangleAnnotation( ):
         self.dy = int(self.h/2)
         self.top_left = np.array([self.center_x - self.dx, self.center_y - self.dy])
         self.bottom_right = np.array([self.center_x + self.dx, self.center_y + self.dy])
+        self.coords = np.concatenate([self.top_left,self.bottom_right])
         self.area = w*h
     
     def applyTransform( self, sn, xn, yn ):
@@ -36,15 +37,6 @@ class RectangleAnnotation( ):
 
     def cropOut( self, mat, newW = None, newH = None ):
         return crop(mat, tuple(self.top_left), tuple(self.bottom_right), newW, newH)
-
-    def computeIoU( self, rect ):
-        int_top_left = np.array([max(self.top_left[0], rect.top_left[0]), max(self.top_left[1], rect.top_left[1])])
-        int_bottom_right = np.array([min(self.bottom_right[0], rect.bottom_right[0]), min(self.bottom_right[1], rect.bottom_right[1])])
-        size = int_bottom_right - int_top_left
-        intersectionArea = 0 if (size < 0).any() else np.prod(size)
-        unionArea = self.area + rect.area - intersectionArea
-        return intersectionArea/unionArea
-        
 
 class EllipseAnnotation( ):
     def __init__( self, major_axis_radius, minor_axis_radius, angle, center_x, center_y ):

@@ -12,6 +12,7 @@ FACE_DATABASE_PATHS = ('face12.hdf', 'face24.hdf', 'face48.hdf')
 NEGATIVE_DATABASE_PATHS = ('neg12.hdf', 'neg24.hdf', 'neg48.hdf')
 TRAIN_DATABASE_PATH = 'train.hdf'
 NUM_NEGATIVES_PER_IMG = 20
+TARGET_NUM_NEGATIVES = 100000
 MIN_FACE_SCALE = 50
 OFFSET = 4
 
@@ -95,8 +96,11 @@ def createDatabase(databasePaths, loadFunc, scales = SCALES):
             w, h = SCALES[i]
             out.create_dataset(databasePath[:databasePath.find('.')], data = loadFunc(w,h), chunks=(32,w,h,3))
 
-def createNegativeDatabase():
-    createDatabase(NEGATIVE_DATABASE_PATHS, lambda w, h: getNegatives(w,h))
+def createNegativeDatasetFor12Net():
+    createDatabase(NEGATIVE_DATABASE_PATHS, lambda w, h: getNegatives(w,h), ((12,12)))
+
+def mineNegatives(stageIdx, numNegatives = TARGET_NUM_NEGATIVES, negImgFolder = NEGATIVE_IMAGES_FOLDER):
+    pass
 
 def createFaceDatabase(faces):
     createDatabase(FACE_DATABASE_PATHS, lambda w, h, faces = faces: cropOutROIs(faces, w, h))

@@ -9,11 +9,11 @@ TEST = True
 from detect import TWELVE_CALIB_NET_FILE_NAME, TWELVE_NET_FILE_NAME
 TRAIN = False
 TRAIN_CALIB = False
-TRAIN_CLASSIFIER = True
+TRAIN_CLASSIFIER = False
 
 if __name__ == '__main__':
     if TEST:
-        from detect import stage1_predict
+        from detect import stage1_predict_multiscale
         
         with cv2Window( WINDOW_TITLE ) as window:
             annotations = data.getFaceAnnotations()
@@ -24,7 +24,7 @@ if __name__ == '__main__':
             while key != 'q':
                 img = cv2.imread(posImgPaths[i])
                 
-                for detection in stage1_predict(img):
+                for detection in stage1_predict_multiscale(img):
                     detection.draw(img)
                 
                 window.show(img)
