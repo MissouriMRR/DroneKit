@@ -26,7 +26,7 @@ if __name__ == '__main__':
                 
                 for detection in stage1_predict_multiscale(img):
                     detection.draw(img)
-                
+
                 window.show(img)
                 key = window.getKey()
                 
@@ -44,5 +44,5 @@ if __name__ == '__main__':
         if TRAIN_CLASSIFIER:
             train(TWELVE_NET_FILE_NAME, 12, False)
         if TRAIN_CALIB:
-            train(TWELVE_CALIB_NET_FILE_NAME, 12, True, True)
+            train(TWELVE_CALIB_NET_FILE_NAME, 12, False, True)
     

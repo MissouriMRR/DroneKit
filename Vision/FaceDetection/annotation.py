@@ -11,8 +11,6 @@ ANNOTATIONS_FOLDER = r'Annotated Faces in the Wild/FDDB-folds'
 ANNOTATION_FILE_NAME_ID = 'ellipseList.txt'
 POSITIVE_IMAGES_FOLDER = r'Annotated Faces in the Wild/originalPics'
 
-annotationFileNames = [name for name in os.listdir(ANNOTATIONS_FOLDER) if name.endswith(ANNOTATION_FILE_NAME_ID)]
-
 class RectangleAnnotation( ):
     def __init__( self, w, h, center_x, center_y ):
         self.w = w
@@ -96,6 +94,7 @@ class Faces( ):
 
 def getFaceAnnotations():
     faceAnnotations = Faces()
+    annotationFileNames = [name for name in os.listdir(ANNOTATIONS_FOLDER) if name.endswith(ANNOTATION_FILE_NAME_ID)]
 
     for fileName in annotationFileNames:
         with open( r'%s\%s' % ( ANNOTATIONS_FOLDER, fileName ) ) as file:

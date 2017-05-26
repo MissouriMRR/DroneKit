@@ -9,8 +9,6 @@ from train import build12net, build12calibNet
 from data import MIN_FACE_SCALE, OFFSET, SCALES, CALIB_PATTERNS
 from annotation import RectangleAnnotation
 
-from collections import namedtuple
-
 TWELVE_NET_FILE_NAME = '12net.hdf'
 TWELVE_CALIB_NET_FILE_NAME = '12calibnet.hdf'
 
@@ -20,14 +18,10 @@ def numDetectionWindowsAlongAxis(size):
     return (size-12)//OFFSET+1
 
 def load_12net():
-    classifier = build12net()
-    classifier.load_weights(TWELVE_NET_FILE_NAME)
-    return classifier
+    return load_model(TWELVE_NET_FILE_NAME)
 
 def load_12netcalib():
-    calibrator = build12calibNet()
-    calibrator.load_weights(TWELVE_CALIB_NET_FILE_NAME)
-    return calibrator
+    return load_model(TWELVE_CALIB_NET_FILE_NAME)
 
 def nms(detections, iouThresh, predictions = None):
     boxes = np.zeros((len(detections), 4))
@@ -97,7 +91,7 @@ def stage1_predict(mat, iouThresh = IOU_THRESH, minFaceScale = MIN_FACE_SCALE):
 
     return nms(posDetections, iouThresh, predictions[posDetectionIndices])
 
-def stage1_predict_multiscale(mat, iouThresh = IOU_THRESH, SCALES = np.arange(MIN_FACE_SCALE, MIN_FACE_SCALE*3, MIN_FACE_SCALE)):
+def stage1_predict_multiscale(mat, iouThresh = IOU_THRESH, SCALES = np.arange(MIN_FACE_SCALE, MIN_FACE_SCALE*3, MIN_FACE_SCALE//2)):
     detections = []
 
     for scale in SCALES:
