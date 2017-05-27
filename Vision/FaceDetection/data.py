@@ -12,7 +12,7 @@ FACE_DATABASE_PATHS = ('face12.hdf', 'face24.hdf', 'face48.hdf')
 NEGATIVE_DATABASE_PATHS = ('neg12.hdf', 'neg24.hdf', 'neg48.hdf')
 TRAIN_DATABASE_PATH = 'train.hdf'
 NUM_NEGATIVES_PER_IMG = 20
-TARGET_NUM_NEGATIVES = 100000
+TARGET_NUM_NEGATIVES = 50000
 MIN_FACE_SCALE = 50
 OFFSET = 4
 
@@ -99,8 +99,54 @@ def createDatabase(databasePaths, loadFunc, scales = SCALES):
 def createNegativeDatasetFor12Net():
     createDatabase(NEGATIVE_DATABASE_PATHS, lambda w, h: getNegatives(w,h), ((12,12)))
 
-def mineNegatives(stageIdx, numNegatives = TARGET_NUM_NEGATIVES, negImgFolder = NEGATIVE_IMAGES_FOLDER):
-    pass
+def mineNegatives(stageNum, numNegatives = TARGET_NUM_NEGATIVES, negImgFolder = NEGATIVE_IMAGES_FOLDER):
+    from detect import stage1_predict_multiscale, IoU
+    from util import detections2boxes
+
+    IOU_THRESH = .01
+
+    scale = SCALES[stageNum-1][0]
+    predict = stage1_predict_multiscale
+    databasePath = NEGATIVE_DATABASE_PATHS[stageNum-1]
+    annotations = getFaceAnnotations()
+    dataset = None
+    len = 0
+
+    with h5py.File(databasePath, 'w') as out:
+        for imgPath in annotations.keys():
+            if len >= numNegatives: break
+            img = cv2.imread(imgPath)
+            if dataset is None: dataset = np.ones((numNegatives, scale, scale, 3),dtype=img.dtype)
+            detections = predict(img, IOU_THRESH)
+            faces = detections2boxes(annotations.getAnnotations(imgPath))
+        
+            for i, detection in enumerate(detections):
+                if len >= numNegatives: break
+                if np.all(IoU(faces, detection.coords)==0):
+                    cropped = detection.cropOut(img, scale, scale)
+                    if cropped is None: continue
+                    dataset[len] = detection.cropOut(img, scale, scale)
+                    len += 1
+                    print('pos', len)
+
+        for root, _, files in os.walk(negImgFolder):
+            if len >= numNegatives: break
+            for fileName in files:
+                if len >= numNegatives: break
+                img = cv2.imread(os.path.join(root, fileName))
+                detections = predict(img, IOU_THRESH)
+                for i, detection in enumerate(detections):
+                    if len >= numNegatives: break
+                    cropped = detection.cropOut(img, scale, scale)
+                    if cropped is None: continue
+                    dataset[len] = detection.cropOut(img,scale,scale)
+                    len += 1
+                    print('neg', len)
+
+        if len < numNegatives:
+            np.delete(dataset, np.s_[len:], 0)
+
+        out.create_dataset(databasePath[:databasePath.find('.')], data = dataset, chunks=(32,scale,scale,3))
 
 def createFaceDatabase(faces):
     createDatabase(FACE_DATABASE_PATHS, lambda w, h, faces = faces: cropOutROIs(faces, w, h))
