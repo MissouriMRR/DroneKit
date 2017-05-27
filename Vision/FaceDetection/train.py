@@ -86,7 +86,7 @@ def build24calibNet():
     return model
 
 def trainModel(saveFileName, scale, numEpochs, X_train, y_train, X_test, y_test, trainCalib, callbacks = None):
-    if scale >= 24:
+    if scale >= 24 and not trainCalib:
         newSize = {24:12}.get(scale)
         vecs = (X_train, X_test)
         resized = [np.ones((vec.shape[0], newSize, newSize, 3), vec.dtype) for vec in vecs]

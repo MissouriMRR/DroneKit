@@ -8,8 +8,8 @@ WINDOW_TITLE = '12_net_test'
 TEST = False
 
 TRAIN = True
-TRAIN_CALIB = False
-TRAIN_CLASSIFIER = True
+TRAIN_CALIB = True
+TRAIN_CLASSIFIER = False
 TRAIN_SCALE = 24
 
 PROFILE = False
