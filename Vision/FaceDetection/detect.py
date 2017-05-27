@@ -10,19 +10,18 @@ from data import MIN_FACE_SCALE, OFFSET, SCALES, CALIB_PATTERNS
 from annotation import RectangleAnnotation
 from util import static_vars, annotations2matrix, detections2boxes
 
-TWELVE_NET_FILE_NAME = '12net.hdf'
-TWELVE_CALIB_NET_FILE_NAME = '12calibnet.hdf'
-
+NET_FILE_NAMES = {12: '12net.hdf', 24: '24net.hdf'}
+CALIB_NET_FILE_NAMES = {12: '12calibnet.hdf', 24: '24calibnet.hdf'}
 IOU_THRESH = .5
 
 def numDetectionWindowsAlongAxis(size):
     return (size-12)//OFFSET+1
 
 def load_12net():
-    return load_model(TWELVE_NET_FILE_NAME)
+    return load_model(NET_FILE_NAMES.get(12))
 
 def load_12netcalib():
-    return load_model(TWELVE_CALIB_NET_FILE_NAME)
+    return load_model(CALIB_NET_FILE_NAMES.get(12))
 
 @annotations2matrix
 def IoU(boxes, box, area=None):

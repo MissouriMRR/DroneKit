@@ -1,11 +1,12 @@
 import numpy as np
+import cv2
 import h5py
 import matplotlib.pyplot as plt
 import os
 
 import keras
-from keras.models import Sequential
-from keras.layers import Dense, Dropout, Activation, Flatten, Conv2D, MaxPooling2D
+from keras.models import Sequential, Model
+from keras.layers import Dense, Dropout, Activation, Flatten, Conv2D, MaxPooling2D, Input, concatenate
 from keras.optimizers import Adam
 from keras.callbacks import ReduceLROnPlateau, ModelCheckpoint
 from keras.utils import np_utils
@@ -44,8 +45,60 @@ def build12calibNet():
     model.compile(loss='categorical_crossentropy', optimizer=Adam(), metrics=['accuracy'])
     return model
 
+def build24net():
+    model = Sequential()
+    model.add(Conv2D(64, (5, 5), activation='relu', input_shape=(24,24,3)))
+    model.add(MaxPooling2D(pool_size=(3,3),strides=2))
+    model.add(Dropout(0.3))
+
+    model.add(Flatten())
+    model.add(Dense(128, activation='relu'))
+
+    secondaryInput = Input(shape=(12,12,3))
+    convLayer = Conv2D(16, (3, 3), activation='relu')(secondaryInput)
+    poolingLayer = MaxPooling2D((3,3), strides=2)(convLayer)
+ 
+    flattened = Flatten()(poolingLayer)
+    secondaryOutput = Dense(16, activation='relu')(flattened)
+    dropoutLayer = Dropout(0.3)(secondaryOutput)
+
+    primaryInput = Input(shape=(24,24,3))
+    merged = concatenate([model(primaryInput), dropoutLayer])
+    finalDropout = Dropout(0.3)(merged)
+    output = Dense(2, activation='softmax')(finalDropout)
+
+    finalModel = Model(inputs=[primaryInput, secondaryInput], outputs=output)
+    finalModel.compile(loss='binary_crossentropy', optimizer=Adam(), metrics=['accuracy'])
+    return finalModel
+
+def build24calibNet():
+    model = Sequential()
+    model.add(Conv2D(32, (5, 5), activation='relu', input_shape=(24,24,3)))
+    model.add(MaxPooling2D(pool_size=(3,3),strides=2))
+    model.add(Dropout(0.3))
+
+    model.add(Flatten())
+    model.add(Dense(64, activation='relu'))
+    model.add(Dropout(0.3))
+    model.add(Dense(45, activation='softmax'))
+    
+    model.compile(loss='categorical_crossentropy', optimizer=Adam(), metrics=['accuracy'])
+    return model
+
 def trainModel(saveFileName, scale, numEpochs, X_train, y_train, X_test, y_test, trainCalib, callbacks = None):
-    getModel = {12: build12net} if not trainCalib else {12: build12calibNet}
+    if scale >= 24:
+        newSize = {24:12}.get(scale)
+        vecs = (X_train, X_test)
+        resized = [np.ones((vec.shape[0], newSize, newSize, 3), vec.dtype) for vec in vecs]
+
+        for i, vec in enumerate(vecs):
+            for j in np.arange(vec.shape[0]):
+                resized[i][j] = cv2.resize(vec[j], (newSize,newSize))
+        
+        X_train = [X_train, resized[0]]
+        X_test = [X_test, resized[1]]
+        
+    getModel = {12: build12net, 24: build24net} if not trainCalib else {12: build12calibNet, 24: build24calibNet}
     numCategories = 2 if not trainCalib else 45
 
     y_train = np_utils.to_categorical(y_train, numCategories)

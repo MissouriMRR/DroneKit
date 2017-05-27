@@ -7,15 +7,16 @@ import cProfile
 WINDOW_TITLE = '12_net_test'
 TEST = False
 
-TRAIN = False
+TRAIN = True
 TRAIN_CALIB = False
-TRAIN_CLASSIFIER = False
+TRAIN_CLASSIFIER = True
+TRAIN_SCALE = 24
 
 PROFILE = False
 
 if __name__ == '__main__':
     if TEST:
-        from detect import stage1_predict_multiscale, TWELVE_CALIB_NET_FILE_NAME, TWELVE_NET_FILE_NAME
+        from detect import stage1_predict_multiscale
         
         with cv2Window( WINDOW_TITLE ) as window:
             annotations = data.getFaceAnnotations()
@@ -44,9 +45,10 @@ if __name__ == '__main__':
 
     elif TRAIN:
         from train import train
+        from detect import NET_FILE_NAMES, CALIB_NET_FILE_NAMES
 
         if TRAIN_CLASSIFIER:
-            train(TWELVE_NET_FILE_NAME, 12, False)
+            train(NET_FILE_NAMES.get(TRAIN_SCALE), TRAIN_SCALE, False)
         if TRAIN_CALIB:
-            train(TWELVE_CALIB_NET_FILE_NAME, 12, False, True)
+            train(CALIB_NET_FILE_NAMES.get(TRAIN_SCALE), TRAIN_SCALE, False, True)
     
