@@ -23,6 +23,12 @@ def load_12net():
 def load_12netcalib():
     return load_model(CALIB_NET_FILE_NAMES.get(12))
 
+def load_24net():
+    return load_model(NET_FILE_NAMES.get(24))
+
+def load_24netcalib():
+    return load_model(CALIB_NET_FILE_NAMES.get(24))
+
 @annotations2matrix
 def IoU(boxes, box, area=None):
     int_x1, int_y1, int_x2, int_y2 = ((np.maximum if i < 2 else np.minimum)(boxes[:, i], box[i]) for i in np.arange(boxes.shape[1]))
@@ -94,3 +100,37 @@ def stage1_predict_multiscale(mat, iouThresh = IOU_THRESH, SCALES = np.arange(MI
         detections.extend(stage1_predict(mat, iouThresh, scale))
 
     return nms(detections, iouThresh)
+
+@static_vars(classifier=None, calibrator=None)
+def stage2_predict_multiscale(mat, iouThresh = IOU_THRESH, SCALES = np.arange(MIN_FACE_SCALE, MIN_FACE_SCALE*3, MIN_FACE_SCALE//2)):
+    if stage2_predict_multiscale.classifier is None:
+        stage2_predict_multiscale.classifier = load_24net()
+    if stage2_predict_multiscale.calibrator is None:
+        stage2_predict_multiscale.calibrator = load_24netcalib()
+    
+    detectionWindows = stage1_predict_multiscale(mat, iouThresh, SCALES)
+
+    numDetectionWindows = len(detectionWindows)
+    netPrimaryInput = np.ones((numDetectionWindows, 24, 24, 3), mat.dtype)
+    netSecondaryInput = np.ones((numDetectionWindows, 12, 12, 3), mat.dtype)
+
+    for i, detection in enumerate(detectionWindows):
+        cropped = detection.cropOut(mat, 24, 24)
+        if cropped is None: continue
+        netPrimaryInput[i] = detection.cropOut(mat, 24, 24)
+        netSecondaryInput[i] = cv2.resize(netPrimaryInput[i], (12, 12))
+    
+    if numDetectionWindows > 0:
+        predictions = stage2_predict_multiscale.classifier.predict([netPrimaryInput/255, netSecondaryInput/255])[:,1]
+        remainingDetectionIndices = np.where(predictions>=.5)[0]
+        remainingDetectionWindows = [detectionWindows[i] for i in remainingDetectionIndices]
+
+        if len(remainingDetectionIndices) > 0:
+            calibPredictions = np.argmax(stage2_predict_multiscale.calibrator.predict(netPrimaryInput[remainingDetectionIndices]/255), 1)
+            for i, calibIdx in enumerate(calibPredictions):
+                remainingDetectionWindows[i].applyTransform(*CALIB_PATTERNS[calibIdx])
+
+        return nms(remainingDetectionWindows, iouThresh, predictions[remainingDetectionIndices])
+    else:
+        return []
+        
