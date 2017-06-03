@@ -5,11 +5,11 @@ import cv2
 import cProfile
 
 WINDOW_TITLE = 'Face Detector Test'
-TEST = True
+TEST = False
 
-TRAIN = False
-TRAIN_CALIB = False
-TRAIN_CLASSIFIER = False
+TRAIN = True
+TRAIN_CALIB = True
+TRAIN_CLASSIFIER = True
 TRAIN_SCALE = 24
 
 PROFILE = False
@@ -17,16 +17,16 @@ PROFILE = False
 if __name__ == '__main__':
     if TEST:
         from detect import stage2_predict_multiscale
-        
+
         with cv2Window( WINDOW_TITLE ) as window:
             annotations = data.getFaceAnnotations()
             posImgPaths = tuple(annotations.keys())
             i = 0
             key = ''
-            
+
             while key != 'q':
                 img = cv2.imread(posImgPaths[i])
-                
+
                 for detection in stage2_predict_multiscale(img):
                     detection.draw(img)
 
@@ -34,10 +34,10 @@ if __name__ == '__main__':
                     cProfile.run('stage2_predict_multiscale(img)')
                 window.show(img)
                 key = window.getKey()
-                
+
                 while key not in 'npq':
                     key = window.getKey()
-                
+
                 if key == 'n':
                     i = ( i + 1 ) % len(posImgPaths)
                 elif key == 'p':
@@ -51,4 +51,3 @@ if __name__ == '__main__':
             train(NET_FILE_NAMES.get(TRAIN_SCALE), TRAIN_SCALE, False)
         if TRAIN_CALIB:
             train(CALIB_NET_FILE_NAMES.get(TRAIN_SCALE), TRAIN_SCALE, False, True)
-    
