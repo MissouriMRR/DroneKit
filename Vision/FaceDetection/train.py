@@ -1,3 +1,4 @@
+#!/usr/bin/env python3.5
 import numpy as np
 import cv2
 import h5py
@@ -27,7 +28,7 @@ def build12net():
     model.add(Dense(16, activation='relu'))
     model.add(Dropout(0.3))
     model.add(Dense(2, activation='softmax'))
-    
+
     model.compile(loss='binary_crossentropy', optimizer=Adam(), metrics=['accuracy'])
     return model
 
@@ -41,7 +42,7 @@ def build12calibNet():
     model.add(Dense(128, activation='relu'))
     model.add(Dropout(0.3))
     model.add(Dense(45, activation='softmax'))
-    
+
     model.compile(loss='categorical_crossentropy', optimizer=Adam(), metrics=['accuracy'])
     return model
 
@@ -57,7 +58,7 @@ def build24net():
     secondaryInput = Input(shape=(12,12,3))
     convLayer = Conv2D(16, (3, 3), activation='relu')(secondaryInput)
     poolingLayer = MaxPooling2D((3,3), strides=2)(convLayer)
- 
+
     flattened = Flatten()(poolingLayer)
     secondaryOutput = Dense(16, activation='relu')(flattened)
     dropoutLayer = Dropout(0.3)(secondaryOutput)
@@ -81,7 +82,7 @@ def build24calibNet():
     model.add(Dense(64, activation='relu'))
     model.add(Dropout(0.3))
     model.add(Dense(45, activation='softmax'))
-    
+
     model.compile(loss='categorical_crossentropy', optimizer=Adam(), metrics=['accuracy'])
     return model
 
@@ -94,10 +95,10 @@ def trainModel(saveFileName, scale, numEpochs, X_train, y_train, X_test, y_test,
         for i, vec in enumerate(vecs):
             for j in np.arange(vec.shape[0]):
                 resized[i][j] = cv2.resize(vec[j], (newSize,newSize))
-        
+
         X_train = [X_train, resized[0]]
         X_test = [X_test, resized[1]]
-        
+
     getModel = {12: build12net, 24: build24net} if not trainCalib else {12: build12calibNet, 24: build24calibNet}
     numCategories = 2 if not trainCalib else 45
 
@@ -105,7 +106,7 @@ def trainModel(saveFileName, scale, numEpochs, X_train, y_train, X_test, y_test,
     y_test = np_utils.to_categorical(y_test, numCategories)
     model = getModel.get(scale)()
 
-    hist = model.fit(X_train, y_train, validation_data=(X_test, y_test), callbacks=callbacks, batch_size=32, epochs=numEpochs, verbose=1)
+    hist = model.fit(X_train, y_train, validation_data=(X_test, y_test), callbacks=callbacks, batch_size=32, epochs=numEpochs, verbose=2)
     return (hist, model.evaluate(X_test, y_test, verbose=0))
 
 def train(saveFileName, scale, verbose = True, trainCalib = False, numEpochs = NUM_EPOCHS):

@@ -1,3 +1,4 @@
+#!/usr/bin/env python3.5
 import cv2
 import numpy as np
 import h5py
@@ -34,7 +35,7 @@ def visualizer(img_db, callback = None, win_title = 'Visualizer'):
             if quit: break
             img = img_db[i]
 
-            if callback: 
+            if callback:
                 callback(img, img_db, imgPath)
 
             window.show(img)

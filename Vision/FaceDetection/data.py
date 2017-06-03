@@ -1,3 +1,4 @@
+#!/usr/bin/env python3.5
 import h5py
 import random
 import cv2
@@ -56,7 +57,7 @@ def getNegatives(w, h, imgFolder = NEGATIVE_IMAGES_FOLDER, numNegativesPerImg = 
             top_left = (randXIdx[j] * MIN_FACE_SCALE, randYIdx[j] * MIN_FACE_SCALE)
             bottom_right = (top_left[0] + MIN_FACE_SCALE, top_left[1] + MIN_FACE_SCALE)
             cropped = crop(img, top_left, bottom_right, MIN_FACE_SCALE, MIN_FACE_SCALE)
-            if cropped is None: 
+            if cropped is None:
                 continue
             db[len] = cv2.resize(cropped, (w,h))
             len += 1
@@ -119,7 +120,7 @@ def mineNegatives(stageNum, numNegatives = TARGET_NUM_NEGATIVES, negImgFolder = 
             if dataset is None: dataset = np.ones((numNegatives, scale, scale, 3),dtype=img.dtype)
             detections = predict(img, IOU_THRESH)
             faces = detections2boxes(annotations.getAnnotations(imgPath))
-        
+
             for i, detection in enumerate(detections):
                 if len >= numNegatives: break
                 if np.all(IoU(faces, detection.coords)==0):
@@ -166,7 +167,7 @@ def createCalibrationDataset(faces, scale = SCALES[0][0], numCalibrationSamples 
     with h5py.File(CALIBRATION_DATABASE_PATHS.get(scale), 'w') as out:
         while i < calibDbLen and j < len(posImgPaths):
             img = cv2.imread(posImgPaths[j])
-            
+
             for annotation in faces.getAnnotations(posImgPaths[j]):
                 for n, (sn, xn, yn) in enumerate(CALIB_PATTERNS):
                     dim = np.array([annotation.w, annotation.h])
@@ -179,7 +180,7 @@ def createCalibrationDataset(faces, scale = SCALES[0][0], numCalibrationSamples 
                         y[i] = n
                         i += 1
             j += 1
-        
+
         if i < calibDbLen:
             np.delete(y, np.s_[i:], 0)
             np.delete(db, np.s_[i:], 0)
@@ -199,7 +200,7 @@ def createTrainingDataset(scale = SCALES[0][0]):
     img_dtype = pos_db[0].dtype
     y = np.vstack((np.ones((len(pos_db),1),dtype=img_dtype),np.zeros((len(neg_db),1))))
     db = np.vstack((pos_db,neg_db))
-    
+
     perm = np.random.permutation(db.shape[0])
     y = y[perm]
     db = db[perm]

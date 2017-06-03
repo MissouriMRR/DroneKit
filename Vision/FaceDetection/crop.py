@@ -1,3 +1,4 @@
+#!/usr/bin/env python3.5
 import cv2
 import numpy as np
 
@@ -8,7 +9,7 @@ def crop(mat, topLeft, bottomRight, newW = None, newH = None):
     top_left = fitCoordToImage(topLeft)
     bottom_right = fitCoordToImage(bottomRight)
     cropped = None
-        
+
     ratio = lambda dim: (bottom_right[dim]-top_left[dim])/(bottomRight[dim]-topLeft[dim]) if (bottomRight[dim]-topLeft[dim]) > 0 else 0
 
     if (ratio(0) >= VALID_CROP_THRESHOLD and ratio(1) >= VALID_CROP_THRESHOLD):

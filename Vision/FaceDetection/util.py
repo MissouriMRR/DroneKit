@@ -1,3 +1,4 @@
+#!/usr/bin/env python3.5
 import numpy as np
 
 from annotation import RectangleAnnotation
@@ -16,14 +17,14 @@ def detections2boxes(detections):
     for i, detection in enumerate(detections):
         assert type(detection) is RectangleAnnotation
         boxes[i] = detection.coords
-            
+
     return boxes
 
 def annotations2matrix(func):
     def convert_param(detections, *args, **kwargs):
         if isinstance(detections, (tuple, list)):
             detections = detections2boxes(detections)
-    
+
         return func(detections, *args, **kwargs)
 
     return convert_param

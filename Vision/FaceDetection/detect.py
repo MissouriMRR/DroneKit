@@ -1,3 +1,4 @@
+#!/usr/bin/env python3.5
 import cv2
 import numpy as np
 
@@ -49,7 +50,7 @@ def nms(detections, iouThresh, predictions = None):
 
         int_over_union = IoU(boxes[idxs[:-1]], pick)
         idxs = np.delete(idxs, np.concatenate(([len(idxs)-1],np.where(int_over_union > iouThresh)[0])))
-    
+
     return [detections[idx] for idx in picked]
 
 @static_vars(classifier = None, calibrator = None)
@@ -73,7 +74,7 @@ def stage1_predict(mat, iouThresh = IOU_THRESH, minFaceScale = MIN_FACE_SCALE):
             top_left = coords[i]
             rois[i] = resized[top_left[1]:top_left[1]+scale,top_left[0]:top_left[0]+scale]
             i += 1
-    
+
     predictions = stage1_predict.classifier.predict(rois/255)[:,1]
     posDetectionIndices = np.where(predictions>=.5)
     numDetections = posDetectionIndices[0].shape[0]
@@ -107,7 +108,7 @@ def stage2_predict_multiscale(mat, iouThresh = IOU_THRESH, SCALES = np.arange(MI
         stage2_predict_multiscale.classifier = load_24net()
     if stage2_predict_multiscale.calibrator is None:
         stage2_predict_multiscale.calibrator = load_24netcalib()
-    
+
     detectionWindows = stage1_predict_multiscale(mat, iouThresh, SCALES)
 
     numDetectionWindows = len(detectionWindows)
@@ -119,7 +120,7 @@ def stage2_predict_multiscale(mat, iouThresh = IOU_THRESH, SCALES = np.arange(MI
         if cropped is None: continue
         netPrimaryInput[i] = detection.cropOut(mat, 24, 24)
         netSecondaryInput[i] = cv2.resize(netPrimaryInput[i], (12, 12))
-    
+
     if numDetectionWindows > 0:
         predictions = stage2_predict_multiscale.classifier.predict([netPrimaryInput/255, netSecondaryInput/255])[:,1]
         remainingDetectionIndices = np.where(predictions>=.5)[0]
@@ -133,4 +134,3 @@ def stage2_predict_multiscale(mat, iouThresh = IOU_THRESH, SCALES = np.arange(MI
         return nms(remainingDetectionWindows, iouThresh, predictions[remainingDetectionIndices])
     else:
         return []
-        

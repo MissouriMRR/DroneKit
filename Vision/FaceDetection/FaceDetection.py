@@ -1,3 +1,5 @@
+
+#!/usr/bin/env python3.5
 import data
 from visualize import cv2Window
 
@@ -8,9 +10,9 @@ WINDOW_TITLE = 'Face Detector Test'
 TEST = False
 
 TRAIN = True
-TRAIN_CALIB = True
+TRAIN_CALIB = False
 TRAIN_CLASSIFIER = True
-TRAIN_SCALE = 24
+TRAIN_SCALE = 12
 
 PROFILE = False
 

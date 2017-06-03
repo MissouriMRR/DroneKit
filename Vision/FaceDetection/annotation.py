@@ -1,3 +1,4 @@
+#!/usr/bin/env python3.5
 import cv2
 import numpy as np
 import os
@@ -23,7 +24,7 @@ class RectangleAnnotation( ):
         self.bottom_right = np.array([self.center_x + self.dx, self.center_y + self.dy])
         self.coords = np.concatenate([self.top_left,self.bottom_right])
         self.area = w*h
-    
+
     def applyTransform( self, sn, xn, yn ):
         newDim = np.array([self.w,self.h])/sn
         newTopLeft = self.top_left - np.array([xn,yn])*newDim
@@ -58,7 +59,7 @@ class EllipseAnnotation( ):
 class Faces( ):
     def __init__( self ):
         self.faces = {}
-    
+
     def _insert(self, imgPath, annotation):
         if imgPath not in self.faces:
             self.faces[imgPath] = []
