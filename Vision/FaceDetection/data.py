@@ -1,210 +1,175 @@
 #!/usr/bin/env python3.5
-import h5py
 import random
+import os
+import math
+
+import h5py
 import cv2
 import numpy as np
-import os
+import sqlite3
 
-from crop import crop, cropOutROIs
-from annotation import RectangleAnnotation, EllipseAnnotation, getFaceAnnotations, ANNOTATIONS_FOLDER, POSITIVE_IMAGES_FOLDER
+from util import static_vars
+from FaceDetection import DEBUG
 
-NEGATIVE_IMAGES_FOLDER = r'./Negative Images/images'
+POSITIVE_IMAGE_DATABASE_FOLDER = r'aflw/data/'
+POSITIVE_IMAGE_FOLDER = POSITIVE_IMAGE_DATABASE_FOLDER + 'flickr/'
+POSITIVE_IMAGE_DATABASE_FILE = os.path.join(POSITIVE_IMAGE_DATABASE_FOLDER, 'aflw.sqlite')
 FACE_DATABASE_PATHS = ('face12.hdf', 'face24.hdf', 'face48.hdf')
+
+DATASET_LABEL = 'data'
+LABELS_LABEL = 'labels'
+BATCH_SIZE = 32
+
+NEGATIVE_IMAGE_FOLDER = r'Negative Images/images/'
 NEGATIVE_DATABASE_PATHS = ('neg12.hdf', 'neg24.hdf', 'neg48.hdf')
-TRAIN_DATABASE_PATH = 'train.hdf'
-NUM_NEGATIVES_PER_IMG = 20
-TARGET_NUM_NEGATIVES = 50000
-MIN_FACE_SCALE = 50
+TARGET_NUM_NEGATIVES_PER_IMG = 40
+TARGET_NUM_NEGATIVES = 200000
+MIN_FACE_SCALE = 80
 OFFSET = 4
 
 SCALES = ((12,12),(24,24),(48,48))
 
 CALIBRATION_DATABASE_PATHS = {SCALES[0][0]:'calib12.hdf',SCALES[1][0]:'calib24.hdf',SCALES[2][0]:'calib48.hdf'}
-TARGET_NUM_CALIBRATION_SAMPLES = 5000
+TARGET_NUM_CALIBRATION_SAMPLES = None
 SN = (.83, .91, 1, 1.1, 1.21)
 XN = (-.17, 0, .17)
 YN = XN
 CALIB_PATTERNS = [(sn, xn, yn) for sn in SN for xn in XN for yn in YN]
 
-def loadDatabase(databasePath, isNegativeDataset = False):
-    db = None
+RANDOM_SEED = 42
+np.random.seed(RANDOM_SEED)
 
-    try:
-        with h5py.File(databasePath, 'r') as infile:
-            db = infile[databasePath[:databasePath.find('.')]][:]
-    except IOError as ioError:
-        pass
+def numDetectionWindowsAlongAxis(size, stageIdx = 0):
+    return (size-SCALES[stageIdx][0])//OFFSET+1
 
-    return db
+@static_vars(faces = [])
+def getFaceAnnotations(dbPath = POSITIVE_IMAGE_DATABASE_FILE, posImgFolder = POSITIVE_IMAGE_FOLDER):
+    if len(getFaceAnnotations.faces) == 0:
+        with sqlite3.connect(dbPath) as conn:
+            c = conn.cursor()
 
-def getNegatives(w, h, imgFolder = NEGATIVE_IMAGES_FOLDER, numNegativesPerImg =  NUM_NEGATIVES_PER_IMG, numNegatives = None):
-    posDb = loadDatabase('face%d.hdf' % w)
-    numNegatives = posDb.shape[0]*NUM_NEGATIVES_PER_IMG if posDb is not None and numNegatives is None else numNegatives
-    db = np.ones((numNegatives,w,h,3),dtype=posDb[0].dtype)
-    len = 0
+            select_string = "faceimages.filepath, facerect.x, facerect.y, facerect.w, facerect.h"
+            from_string = "faceimages, faces, facepose, facerect"
+            where_string = "faces.face_id = facepose.face_id and faces.file_id = faceimages.file_id and faces.face_id = facerect.face_id"
+            query_string = "SELECT " + select_string + " FROM " + from_string + " WHERE " + where_string
 
-    for i, imgPath in enumerate(os.listdir(imgFolder)):
-        if len >= int(numNegatives*.9): break
-        img = cv2.imread('%s\%s' % ( NEGATIVE_IMAGES_FOLDER, imgPath ))
-        maxDimIdx = ((img.shape[1]-MIN_FACE_SCALE)//MIN_FACE_SCALE,(img.shape[0]-MIN_FACE_SCALE)//MIN_FACE_SCALE)
-        randXIdx = np.random.permutation(maxDimIdx[0])
-        randYIdx = np.random.permutation(maxDimIdx[1])
-        checked = 0
-        extracted = 0
+            for row in c.execute(query_string):
+                imgPath = os.path.join(posImgFolder, str(row[0]))
 
-        for j in np.arange(min(randXIdx.shape[0], randYIdx.shape[0])):
-            if len >= int(numNegatives*.9) or checked >= randXIdx.shape[0]*randYIdx.shape[0] or extracted >= NUM_NEGATIVES_PER_IMG: break
-            top_left = (randXIdx[j] * MIN_FACE_SCALE, randYIdx[j] * MIN_FACE_SCALE)
-            bottom_right = (top_left[0] + MIN_FACE_SCALE, top_left[1] + MIN_FACE_SCALE)
-            cropped = crop(img, top_left, bottom_right, MIN_FACE_SCALE, MIN_FACE_SCALE)
-            if cropped is None:
-                continue
-            db[len] = cv2.resize(cropped, (w,h))
-            len += 1
-            extracted += 1
+                if os.path.isfile(imgPath):
+                    getFaceAnnotations.faces.append((imgPath, *row[1:]))
 
+    return getFaceAnnotations.faces
+
+def squashCoords(img, x, y, w, h):
+    y = min(max(0, y), img.shape[0])
+    x = min(max(0, x), img.shape[1])
+    h = min(img.shape[0]-y, h)
+    w = min(img.shape[1]-x, w)
+    return (x, y, w, h)
+
+def debug_showImage(img):
+    cv2.imshow('debug', img)
+    cv2.waitKey()
+
+def createFaceDataset(stageIdx, debug = DEBUG):
+    fileName = FACE_DATABASE_PATHS[stageIdx]
+    resizeTo = SCALES[stageIdx]
+    faceAnnotations = getFaceAnnotations()
+    images = np.zeros((len(faceAnnotations), resizeTo[1], resizeTo[0], 3), dtype = np.uint8)
+    curImg = None
+    prevImgPath = None
+
+    for i, (imgPath, x, y, w, h) in enumerate(faceAnnotations):
+        if imgPath != prevImgPath:
+            curImg = cv2.imread(imgPath)
+
+        x, y, w, h = squashCoords(curImg, x, y, w, h)
+        images[i] = cv2.resize(curImg[y:y+h,x:x+w], resizeTo)
+        prevImgPath = imgPath
+
+        if debug:
+            debug_showImage(images[i])
+
+    with h5py.File(fileName, 'w') as out:
+        out.create_dataset(DATASET_LABEL, data = images, chunks = (BATCH_SIZE, *images.shape[1:]))
+
+
+
+def createNegativeDataset(stageIdx, negImgFolder = NEGATIVE_IMAGE_FOLDER, numNegatives = TARGET_NUM_NEGATIVES, numNegativesPerImg = TARGET_NUM_NEGATIVES_PER_IMG, debug = DEBUG):
+    fileName = NEGATIVE_DATABASE_PATHS[stageIdx]
+    resizeTo = SCALES[stageIdx]
+    negativeImagePaths = [os.path.join(negImgFolder, fileName) for fileName in os.listdir(negImgFolder)]
+    images = np.zeros((numNegatives, resizeTo[1], resizeTo[0], 3), dtype = np.uint8)
+    negIdx = 0
+    numNegativesRetrievedFromImg = 0
+
+    for i in np.random.permutation(len(negativeImagePaths)):
+        if negIdx >= numNegatives: break
+        img = cv2.resize(cv2.imread(negativeImagePaths[i]), None, fx = resizeTo[0]/MIN_FACE_SCALE, fy = resizeTo[1]/MIN_FACE_SCALE)
+
+        for xOffset in np.random.permutation(numDetectionWindowsAlongAxis(img.shape[1], stageIdx)):
+            if negIdx >= numNegatives or numNegativesRetrievedFromImg >= numNegativesPerImg: break
+
+            for yOffset in np.random.permutation(numDetectionWindowsAlongAxis(img.shape[0], stageIdx)):
+                if negIdx >= numNegatives or numNegativesRetrievedFromImg >= numNegativesPerImg: break
+                x, y, w, h = squashCoords(img, resizeTo[0]*xOffset, resizeTo[1]*yOffset, *resizeTo)
+
+                if (w == resizeTo[0] and h == resizeTo[1]):
+                    images[negIdx] = img[y:y+h,x:x+w]
+                    negIdx += 1
+                    numNegativesRetrievedFromImg += 1
+
+                    if debug:
+                        debug_showImage(images[negIdx-1])
+
+        numNegativesRetrievedFromImg = 0
+
+    if negIdx < len(images)-1:
+        images = np.delete(images, np.s_[negIdx:], 0)
+        if debug: print(images.shape)
+
+    with h5py.File(fileName, 'w') as out:
+        out.create_dataset(DATASET_LABEL, data = images, chunks = (BATCH_SIZE, *images.shape[1:]))
+
+def createCalibrationDataset(stageIdx, numCalibrationSamples = TARGET_NUM_CALIBRATION_SAMPLES if not DEBUG else BATCH_SIZE*2, calibPatterns = CALIB_PATTERNS, debug = DEBUG):
+    numCalibrationSamples = math.inf if numCalibrationSamples is None else numCalibrationSamples
     faceAnnotations = getFaceAnnotations()
 
-    for i, imgPath in enumerate(faceAnnotations.keys()):
-       if len >= numNegatives: break
-       annotations = faceAnnotations.getAnnotations(imgPath)
-       img = cv2.imread(imgPath)
-       maxDimIdx = ((img.shape[1]-MIN_FACE_SCALE)//MIN_FACE_SCALE,(img.shape[0]-MIN_FACE_SCALE)//MIN_FACE_SCALE)
-       randXIdx = np.random.permutation(maxDimIdx[0])
-       randYIdx = np.random.permutation(maxDimIdx[1])
-       checked = 0
-       extracted = 0
+    resizeTo = SCALES[stageIdx]
+    datasetLen = len(faceAnnotations)*len(calibPatterns) if numCalibrationSamples == math.inf else numCalibrationSamples
+    dataset = np.zeros((datasetLen, resizeTo[1], resizeTo[0], 3), np.uint8)
+    labels = np.zeros((datasetLen, 1))
+    sampleIdx = 0
 
-       for j in np.arange(min(randXIdx.shape[0], randYIdx.shape[0])):
-            if len >= numNegatives or checked >= randXIdx.shape[0]*randYIdx.shape[0] or extracted >= NUM_NEGATIVES_PER_IMG: break
-            checked += 1
-            top_left = (randXIdx[j] * MIN_FACE_SCALE, randYIdx[j] * MIN_FACE_SCALE)
-            bottom_right = (top_left[0] + MIN_FACE_SCALE, top_left[1] + MIN_FACE_SCALE)
-            rect = RectangleAnnotation(MIN_FACE_SCALE, MIN_FACE_SCALE, top_left[0] + MIN_FACE_SCALE//2, top_left[1] + MIN_FACE_SCALE//2)
-            if any([annotation.computeIoU(rect) > 0 for annotation in annotations]):
-               continue
-            cropped = crop(img, top_left, bottom_right, MIN_FACE_SCALE, MIN_FACE_SCALE)
-            if cropped is None: continue
-            db[len] = cv2.resize(cropped, (w,h))
-            len += 1
-            extracted += 1
+    fileName = CALIBRATION_DATABASE_PATHS.get(resizeTo[0])
 
-    return db
+    curImg = None
+    prevImgPath = None
+    
+    for i, (imgPath, x, y, w, h) in enumerate(faceAnnotations):
+        if sampleIdx >= numCalibrationSamples: break
 
-def createDatabase(databasePaths, loadFunc, scales = SCALES):
-    for i, databasePath in enumerate(databasePaths):
-        with h5py.File(databasePath, 'w') as out:
-            w, h = SCALES[i]
-            out.create_dataset(databasePath[:databasePath.find('.')], data = loadFunc(w,h), chunks=(32,w,h,3))
+        if imgPath != prevImgPath:
+            curImg = cv2.imread(imgPath)
 
-def createNegativeDatasetFor12Net():
-    createDatabase(NEGATIVE_DATABASE_PATHS, lambda w, h: getNegatives(w,h), ((12,12)))
+        for n, (sn, xn, yn) in enumerate(CALIB_PATTERNS):
+            if sampleIdx >= numCalibrationSamples: break
+            box = squashCoords(curImg, x + int(xn*w), y + int(yn*h), int(w*sn), int(h*sn))
 
-def mineNegatives(stageNum, numNegatives = TARGET_NUM_NEGATIVES, negImgFolder = NEGATIVE_IMAGES_FOLDER):
-    from detect import stage1_predict_multiscale, IoU
-    from util import detections2boxes
+            if box[2] > 0 and box[3] > 0:
+                (box_x, box_y, box_w, box_h) = box
+                dataset[sampleIdx] = cv2.resize(curImg[box_y:box_y+box_h,box_x:box_x+box_w], resizeTo)
+                if debug: debug_showImage(dataset[sampleIdx])
+                labels[sampleIdx] = n 
+                sampleIdx += 1
 
-    IOU_THRESH = .01
+    if sampleIdx < datasetLen:
+        labels = np.delete(labels, np.s_[sampleIdx:], 0)
+        dataset = np.delete(dataset, np.s_[sampleIdx:], 0)
 
-    scale = SCALES[stageNum-1][0]
-    predict = stage1_predict_multiscale
-    databasePath = NEGATIVE_DATABASE_PATHS[stageNum-1]
-    annotations = getFaceAnnotations()
-    dataset = None
-    len = 0
+    if debug: print(dataset.shape, labels.shape)
 
-    with h5py.File(databasePath, 'w') as out:
-        for imgPath in annotations.keys():
-            if len >= numNegatives: break
-            img = cv2.imread(imgPath)
-            if dataset is None: dataset = np.ones((numNegatives, scale, scale, 3),dtype=img.dtype)
-            detections = predict(img, IOU_THRESH)
-            faces = detections2boxes(annotations.getAnnotations(imgPath))
-
-            for i, detection in enumerate(detections):
-                if len >= numNegatives: break
-                if np.all(IoU(faces, detection.coords)==0):
-                    cropped = detection.cropOut(img, scale, scale)
-                    if cropped is None: continue
-                    dataset[len] = detection.cropOut(img, scale, scale)
-                    len += 1
-                    print('pos', len)
-
-        for root, _, files in os.walk(negImgFolder):
-            if len >= numNegatives: break
-            for fileName in files:
-                if len >= numNegatives: break
-                img = cv2.imread(os.path.join(root, fileName))
-                detections = predict(img, IOU_THRESH)
-                for i, detection in enumerate(detections):
-                    if len >= numNegatives: break
-                    cropped = detection.cropOut(img, scale, scale)
-                    if cropped is None: continue
-                    dataset[len] = detection.cropOut(img,scale,scale)
-                    len += 1
-                    print('neg', len)
-
-        if len < numNegatives:
-            np.delete(dataset, np.s_[len:], 0)
-
-        out.create_dataset(databasePath[:databasePath.find('.')], data = dataset, chunks=(32,scale,scale,3))
-
-def createFaceDatabase(faces):
-    createDatabase(FACE_DATABASE_PATHS, lambda w, h, faces = faces: cropOutROIs(faces, w, h))
-
-def createCalibrationDataset(faces, scale = SCALES[0][0], numCalibrationSamples = TARGET_NUM_CALIBRATION_SAMPLES):
-    imgDtype = loadDatabase('face%d.hdf' % scale)[0].dtype
-    numCalibPatterns = len(SN)*len(XN)*len(YN)
-    calibDbLen = numCalibrationSamples * numCalibPatterns
-
-    db = np.ones((calibDbLen, scale, scale, 3), imgDtype)
-    y = np.ones((calibDbLen,1))
-
-    i = 0
-    j = 0
-    posImgPaths = tuple(faces.keys())
-
-    with h5py.File(CALIBRATION_DATABASE_PATHS.get(scale), 'w') as out:
-        while i < calibDbLen and j < len(posImgPaths):
-            img = cv2.imread(posImgPaths[j])
-
-            for annotation in faces.getAnnotations(posImgPaths[j]):
-                for n, (sn, xn, yn) in enumerate(CALIB_PATTERNS):
-                    dim = np.array([annotation.w, annotation.h])
-                    top_left = annotation.top_left + (np.array([xn, yn])*dim).astype(int)
-                    dim = (dim*sn).astype(int)
-                    cropped = crop(img, top_left, top_left + dim, scale, scale)
-
-                    if cropped is not None:
-                        db[i] = cropped
-                        y[i] = n
-                        i += 1
-            j += 1
-
-        if i < calibDbLen:
-            np.delete(y, np.s_[i:], 0)
-            np.delete(db, np.s_[i:], 0)
-
-        out.create_dataset('labels', data=y, chunks=(32,1))
-        out.create_dataset('data', data=db, chunks=(32, scale, scale, 3))
-
-def createCalibrationDatabase(scale = SCALES):
-    faces = getFaceAnnotations()
-    for (w, h) in SCALES:
-        _createCalibrationDataset(faces, w)
-
-
-def createTrainingDataset(scale = SCALES[0][0]):
-    pos_db = loadDatabase('face%d.hdf' % scale)
-    neg_db = loadDatabase('neg%d.hdf' % scale)
-    img_dtype = pos_db[0].dtype
-    y = np.vstack((np.ones((len(pos_db),1),dtype=img_dtype),np.zeros((len(neg_db),1))))
-    db = np.vstack((pos_db,neg_db))
-
-    perm = np.random.permutation(db.shape[0])
-    y = y[perm]
-    db = db[perm]
-
-    with h5py.File(TRAIN_DATABASE_PATH, 'w') as out:
-        out.create_dataset('labels', data=y, chunks=(32,1))
-        out.create_dataset('data', data=db, chunks=(32, scale, scale, 3))
+    with h5py.File(fileName, 'w') as out:
+        out.create_dataset(LABELS_LABEL, data = labels, chunks = (BATCH_SIZE, 1))
+        out.create_dataset(DATASET_LABEL, data = dataset, chunks = (BATCH_SIZE, resizeTo[1], resizeTo[0], 3))

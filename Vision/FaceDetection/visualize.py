@@ -1,10 +1,7 @@
 #!/usr/bin/env python3.5
 import cv2
-import numpy as np
-import h5py
-import data
 
-from data import TRAIN_DATABASE_PATH, SCALES
+from data import SCALES
 
 class cv2Window( ):
     def __init__( self, name, type = cv2.WINDOW_AUTOSIZE ):
@@ -27,29 +24,26 @@ class cv2Window( ):
     def show( self, mat ):
         cv2.imshow( self.name, mat )
 
-def visualizer(img_db, callback = None, win_title = 'Visualizer'):
+def visualizer(images, callback = None, win_title = 'Visualizer'):
     quit = False
+    length = len(images)
 
     with cv2Window( win_title ) as window:
-        for i in np.arange(img_db.shape[0]):
-            if quit: break
-            img = img_db[i]
+        i = 0
+
+        while not quit:
+            img = images[0]
 
             if callback:
-                callback(img, img_db, imgPath)
+                callback(img)
 
             window.show(img)
             key = window.getKey()
 
-            while not ( quit or key == 'n' ):
-                quit = key == 'q'
+            while key not in 'npq':
                 key = window.getKey()
 
-def visualizeDataset():
-    with h5py.File(TRAIN_DATABASE_PATH, 'r') as infile:
-        visualizer(infile['data'])
-
-def visualize(visualizeNegatives=False, scale = SCALES[0][0]):
-    fmt = 'face%d.hdf' if not visualizeNegatives else 'neg%d.hdf'
-    db =  data.loadDatabase(fmt % scale)
-    visualizer(db)
+            if key == 'n':
+                i = ( i + 1 ) % length
+            elif key == 'p':
+                i = i - 1 if i > 0 else length-1

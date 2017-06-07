@@ -1,25 +1,25 @@
-
 #!/usr/bin/env python3.5
-import data
-from visualize import cv2Window
-
-import cv2
-import cProfile
-
 WINDOW_TITLE = 'Face Detector Test'
 TEST = False
 
-TRAIN = True
-TRAIN_CALIB = False
-TRAIN_CLASSIFIER = True
-TRAIN_SCALE = 12
+TRAIN = False
+TRAIN_CLASSIFIER = False
 
 PROFILE = False
+DEBUG = False
 
 if __name__ == '__main__':
-    if TEST:
-        from detect import stage2_predict_multiscale
+    import cv2
+    import cProfile
 
+    import data
+    from visualize import cv2Window
+    from data import SCALES
+
+    STAGE_IDX = 0
+    data.createCalibrationDataset(STAGE_IDX)
+
+    if TEST:
         with cv2Window( WINDOW_TITLE ) as window:
             annotations = data.getFaceAnnotations()
             posImgPaths = tuple(annotations.keys())
@@ -47,9 +47,5 @@ if __name__ == '__main__':
 
     elif TRAIN:
         from train import train
-        from detect import NET_FILE_NAMES, CALIB_NET_FILE_NAMES
-
-        if TRAIN_CLASSIFIER:
-            train(NET_FILE_NAMES.get(TRAIN_SCALE), TRAIN_SCALE, False)
-        if TRAIN_CALIB:
-            train(CALIB_NET_FILE_NAMES.get(TRAIN_SCALE), TRAIN_SCALE, False, True)
+        train(STAGE_IDX)
+        
