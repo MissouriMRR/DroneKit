@@ -15,11 +15,12 @@ import tensorflow as tf
 
 from sklearn.model_selection import train_test_split
 
-from data import SCALES, FACE_DATABASE_PATHS, NEGATIVE_DATABASE_PATHS, DATASET_LABEL, RANDOM_SEED, BATCH_SIZE
+from data import SCALES, FACE_DATABASE_PATHS, NEGATIVE_DATABASE_PATHS, CALIBRATION_DATABASE_PATHS, DATASET_LABEL, LABELS_LABEL, RANDOM_SEED, BATCH_SIZE
 from FaceDetection import TRAIN
 
 PERCENT_TRAIN = .8
 NUM_EPOCHS = 300
+PREPROCESS_BATCH_SIZE = 2**15
 
 def build12net():
     model = Sequential()
@@ -89,19 +90,30 @@ def build24calibNet():
     model.compile(loss='categorical_crossentropy', optimizer=Adam(), metrics=['accuracy'])
     return model
 
-models = {SCALES[0][0]: build12net}
+models = {False: {SCALES[0][0]: build12net}, True: {SCALES[0][0]: build12calibNet}}
 
-def getTrainingSets(faceDatasetFileName, negDatasetFileName):
-    with h5py.File(faceDatasetFileName, 'r') as faces, h5py.File(negDatasetFileName, 'r') as negatives:
-        faceDataset, negDataset = (faces[DATASET_LABEL], negatives[DATASET_LABEL])
-        X = np.vstack((faceDataset, negDataset))
-        y = np.vstack((np.ones((len(faceDataset), 1)), np.zeros((len(negDataset), 1))))
+def preprocessImages(X):
+    sess = tf.Session()
+    with sess.as_default():
+        X = tf.map_fn(lambda img: tf.image.per_image_standardization(img), X.astype(np.float32)).eval()
 
-        sess = tf.Session()
-        with sess.as_default():
-            X = tf.map_fn(lambda img: tf.image.per_image_standardization(img), X.astype(np.float32)).eval()
+    return X
 
-        return train_test_split(X, y, train_size = PERCENT_TRAIN, random_state = RANDOM_SEED)
+def getTrainingSets(trainCalib, *args):
+    if not trainCalib:
+        (faceDatasetFileName, negDatasetFileName) = args
+        with h5py.File(faceDatasetFileName, 'r') as faces, h5py.File(negDatasetFileName, 'r') as negatives:
+            faceDataset, negDataset = (faces[DATASET_LABEL], negatives[DATASET_LABEL])
+            X = preprocessImages(np.vstack((faceDataset, negDataset)))
+            y = np.vstack((np.ones((len(faceDataset), 1)), np.zeros((len(negDataset), 1))))
+    else:
+        calibDatasetFileName = args[0]
+        with h5py.File(calibDatasetFileName, 'r') as calibSamples:
+            X = preprocessImages(calibSamples[DATASET_LABEL][:])
+            y = calibSamples[LABELS_LABEL][:]
+
+    
+    return train_test_split(X, y, train_size = PERCENT_TRAIN, random_state = RANDOM_SEED)
 
 def trainModel(model, X_train, X_test, y_train, y_test, numEpochs, callbacks = None):
     numCategories = int(np.amax(y_test))+1
@@ -111,17 +123,20 @@ def trainModel(model, X_train, X_test, y_train, y_test, numEpochs, callbacks = N
     model.fit(X_train, y_train, validation_data = (X_test, y_test), callbacks = callbacks, batch_size = BATCH_SIZE, epochs = numEpochs, verbose = 2)
 
 
-def train(stageIdx, numEpochs = NUM_EPOCHS):
+def train(stageIdx, trainCalib, numEpochs = NUM_EPOCHS):
     from detect import NET_FILE_NAMES
 
     scale = SCALES[stageIdx][0]
-    fileName = NET_FILE_NAMES[scale]
+    fileName = NET_FILE_NAMES[trainCalib][scale]
     faceDatasetFileName = FACE_DATABASE_PATHS[stageIdx]
     negDatasetFileName = NEGATIVE_DATABASE_PATHS[stageIdx]
+    calibDatasetFileName = CALIBRATION_DATABASE_PATHS.get(scale)
 
-    X_train, X_test, y_train, y_test = getTrainingSets(faceDatasetFileName, negDatasetFileName)
+    fileNames = (faceDatasetFileName, negDatasetFileName) if not trainCalib else (calibDatasetFileName,)
+
+    X_train, X_test, y_train, y_test = getTrainingSets(trainCalib, *fileNames)
     callbacks = [ModelCheckpoint(fileName, monitor='val_loss', save_best_only=True, verbose=1)]
-    model = models.get(scale)()
+    model = models[trainCalib].get(scale)()
 
     trainModel(model, X_train, X_test, y_train, y_test, numEpochs, callbacks)
 

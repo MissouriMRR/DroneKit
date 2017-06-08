@@ -2,8 +2,8 @@
 WINDOW_TITLE = 'Face Detector Test'
 TEST = False
 
-TRAIN = False
-TRAIN_CLASSIFIER = False
+TRAIN = True
+TRAIN_CALIB = True
 
 PROFILE = False
 DEBUG = False
@@ -17,7 +17,6 @@ if __name__ == '__main__':
     from data import SCALES
 
     STAGE_IDX = 0
-    data.createCalibrationDataset(STAGE_IDX)
 
     if TEST:
         with cv2Window( WINDOW_TITLE ) as window:
@@ -47,5 +46,5 @@ if __name__ == '__main__':
 
     elif TRAIN:
         from train import train
-        train(STAGE_IDX)
+        train(STAGE_IDX, TRAIN_CALIB)
         

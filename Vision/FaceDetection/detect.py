@@ -8,8 +8,8 @@ from keras.models import load_model
 from data import numDetectionWindowsAlongAxis, MIN_FACE_SCALE, OFFSET, SCALES, CALIB_PATTERNS
 from util import static_vars
 
-NET_FILE_NAMES = {SCALES[0][0]: '12net.hdf', SCALES[1][0]: '24net.hdf'}
-CALIB_NET_FILE_NAMES = {SCALES[0][0]: '12calibnet.hdf', SCALES[1][0]: '24calibnet.hdf'}
+NET_FILE_NAMES = {False: {SCALES[0][0]: '12net.hdf', SCALES[1][0]: '24net.hdf'}, 
+                  True: {SCALES[0][0]: '12calibnet.hdf', SCALES[1][0]: '24calibnet.hdf'}}
 IOU_THRESH = .5
 
 def load_12net():
