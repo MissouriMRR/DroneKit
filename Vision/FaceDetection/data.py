@@ -11,16 +11,18 @@ import sqlite3
 from util import static_vars
 from FaceDetection import DEBUG
 
-POSITIVE_IMAGE_DATABASE_FOLDER = r'aflw/data/'
+POSITIVE_IMAGE_DATABASE_FOLDER = 'aflw/data/'
 POSITIVE_IMAGE_FOLDER = POSITIVE_IMAGE_DATABASE_FOLDER + 'flickr/'
 POSITIVE_IMAGE_DATABASE_FILE = os.path.join(POSITIVE_IMAGE_DATABASE_FOLDER, 'aflw.sqlite')
 FACE_DATABASE_PATHS = ('face12.hdf', 'face24.hdf', 'face48.hdf')
+TEST_IMAGE_DATABASE_FOLDER = 'Annotated Faces in the Wild/FDDB-folds/'
+TEST_IMAGES_FOLDER = 'Annotated Faces in the Wild/originalPics'
 
 DATASET_LABEL = 'data'
 LABELS_LABEL = 'labels'
 BATCH_SIZE = 32
 
-NEGATIVE_IMAGE_FOLDER = r'Negative Images/images/'
+NEGATIVE_IMAGE_FOLDER = 'Negative Images/images/'
 NEGATIVE_DATABASE_PATHS = ('neg12.hdf', 'neg24.hdf', 'neg48.hdf')
 TARGET_NUM_NEGATIVES_PER_IMG = 40
 TARGET_NUM_NEGATIVES = 200000
@@ -173,3 +175,13 @@ def createCalibrationDataset(stageIdx, numCalibrationSamples = TARGET_NUM_CALIBR
     with h5py.File(fileName, 'w') as out:
         out.create_dataset(LABELS_LABEL, data = labels, chunks = (BATCH_SIZE, 1))
         out.create_dataset(DATASET_LABEL, data = dataset, chunks = (BATCH_SIZE, resizeTo[1], resizeTo[0], 3))
+
+def getTestImagePaths(testImgDbFolder = TEST_IMAGE_DATABASE_FOLDER, testImgsFolder = TEST_IMAGES_FOLDER):
+    imgPaths = []
+
+    for fileName in os.listdir(testImgDbFolder):
+        if 'ellipse' not in fileName:
+            with open(os.path.join(testImgDbFolder, fileName)) as inFile:
+                imgPaths.extend(inFile.read().splitlines())
+
+    return [os.path.join(testImgsFolder, imgPath) + '.jpg' for imgPath in imgPaths]

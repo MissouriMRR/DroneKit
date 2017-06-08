@@ -1,4 +1,5 @@
 #!/usr/bin/env python3.5
+import numpy as np
 import cv2
 
 from data import SCALES
@@ -27,12 +28,15 @@ class cv2Window( ):
 def visualizer(images, callback = None, win_title = 'Visualizer'):
     quit = False
     length = len(images)
+    i = 0
+    img = None
 
     with cv2Window( win_title ) as window:
-        i = 0
-
         while not quit:
-            img = images[0]
+            if type(images[i]) is np.ndarray:
+                img = images[i]
+            elif type(images[i]) is str:
+                img = cv2.imread(images[i])
 
             if callback:
                 callback(img)
@@ -47,3 +51,5 @@ def visualizer(images, callback = None, win_title = 'Visualizer'):
                 i = ( i + 1 ) % length
             elif key == 'p':
                 i = i - 1 if i > 0 else length-1
+            elif key == 'q':
+                quit = True

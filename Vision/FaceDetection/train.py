@@ -20,7 +20,6 @@ from FaceDetection import TRAIN
 
 PERCENT_TRAIN = .8
 NUM_EPOCHS = 300
-PREPROCESS_BATCH_SIZE = 2**15
 
 def build12net():
     model = Sequential()

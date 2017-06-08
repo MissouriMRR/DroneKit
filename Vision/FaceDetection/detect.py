@@ -33,3 +33,6 @@ def IoU(boxes, box, area=None):
     int_over_union = int_area/union_area
     return int_over_union
 
+
+def detect(stageIdx):
+    pass
