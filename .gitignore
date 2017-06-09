@@ -87,3 +87,16 @@ ENV/
 
 # Rope project settings
 .ropeproject
+
+#Ignore image folders
+/Vision/FaceDetection/Annotated Faces in the Wild/
+/Vision/FaceDetection/Annotated Faces in the Wild/**
+/Vision/FaceDetection/Negative Images/
+/Vision/FaceDetection/Negative Images/**
+/Vision/FaceDetection/aflw/**
+/Vision/FaceDetection/aflw/
+
+#Ignore dataset files
+/Vision/FaceDetection/face*.hdf
+/Vision/FaceDetection/neg*.hdf
+/Vision/FaceDetection/calib*.hdf

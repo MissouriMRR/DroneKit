@@ -1,11 +1,28 @@
 # Python simulation of International Aerial Robotics Competition, Mission 7
 # by Tanner Winkelman
 
-# To run, use IDLE or the python command:$ python [filename].py
+# HOW TO RUN:
+#   On a computer in the Computer Science buiding, double click on this file.
+#   A window of the Python GUI opens.
+#   Click Run>Run Module.
+#   It takes 5 seconds to load.
+
+# You can also launch this program from a command line
+#   with the command "python [filename]"
 
 
 import pygame, sys, math, random, time
 
+
+# AI weights, not on same scale
+#these weights are applied after robots that are too close to obstacle robots have been eliminated and robots that are already pointing in a good direction have been eliminated
+OB_WEIGHT = 50
+OB_PROJECT_ROOMBA_FRAMES = 60 # 60f / 5fps * 0.33m/s == 4 meters
+CLOSENESS_WEIGHT = 100000
+CLOSENESS_WIDTH = 10 # pixels
+GREENLINE_WIEGHT = 0.1
+GOOD_DIRECTION_WIDTH = 100 # degrees; the range is half of this in each direction from the direction to the target point in the top of the window
+NO_TARGET_POINT = 12 # seconds; after this many seconds sim9AI no will longer leave its roomba
 
 RUN_SPEED = 20 # times.  Note: limited by hardware
 FRAMES_TO_SKIP = 0 # the number of roomba frames that pass for every time the simulation is drawn
@@ -35,12 +52,46 @@ ROOMBA_HEIGHT = 0.1 # meters
 ROOMBA_TAPPABLE_HEIGHT = 0.12 # meters from floor
 OBSTACLE_RADIUS = 0.05 # meters
 OK_TO_LEAVE_THRESHOLD = 16 # of 24 meters
+DIRECTION_LINE_LENGTH = 15 # pixels
 PI = 3.14159265359 # don't change this value
 
 
 def rotate2d(pos,rad): x,y=pos; s,c = math.sin(rad),math.cos(rad); return x*c-y*s,y*c+x*s;
 def distance2d(pos1,pos2): return math.sqrt( pow(pos1[0] - pos2[0], 2) + pow(pos1[1] - pos2[1], 2) )
 def inBounds(pos): TWENTY_FOURTHS = METERS_PER_WINDOW * PIXELS_PER_METER / 24; return (pos[0] >= 2 * TWENTY_FOURTHS and pos[0] <= 22 * TWENTY_FOURTHS and pos[1] >= 2 * TWENTY_FOURTHS and pos[1] <= 22 * TWENTY_FOURTHS)
+def mod( n, d ):
+  r = n
+  if r > d:
+    while r >= d:
+      r -= d
+  if r < 0:
+    while r < 0:
+      r += d
+  return r
+
+
+"""
+  Desc: inPolygon() returns whether or not the point is in the polygon
+  formed by the points in the arrayOfVertices.
+  inPolygon() is not consistent if the point is on an edge or vertex.
+  Pre: arrayOfVertices is a list of points, where each point is a
+  list of two floats.  point is a list of two floats.
+  Post: a bool is returned
+"""
+def inPolygon(point,arrayOfVertices):
+  numVertices = len( arrayOfVertices )
+  index = 0
+  counter = 0
+  while index < numVertices:
+    vert1 = arrayOfVertices[index]
+    vert2 = arrayOfVertices[(index + 1) % numVertices]
+    if( (vert1[1] > point[1]) != (vert2[1] > point[1]) ):
+      if( vert1[1] != vert2[1] ):
+        if( point[0] - vert1[0] < (point[1] - vert1[1]) * (vert2[0] - vert1[0]) / (vert2[1] - vert1[1]) ):
+          counter += 1
+    index += 1
+  return counter % 2 == 1
+
 
 class Cam:
   def __init__(self,pos=(0,0,0),rot=(0,0)):
@@ -83,11 +134,17 @@ class roomba:
     if inBounds( self.pos ) and inBounds( otherRoomba.pos ):
       distance = distance2d( self.pos, otherRoomba.pos )
       collision = distance < 2 * ROOMBA_RADIUS * PIXELS_PER_METER
+      #print(type(self),type(otherRoomba), collision)
       if collision:
-        if distance > distance2d( (self.pos[0] + math.cos(self.rotDeg * PI / 180), self.pos[1] + math.sin(self.rotDeg * PI / 180)), otherRoomba.pos ):
+        angle = math.atan2( otherRoomba.pos[1] - self.pos[1], otherRoomba.pos[0] - self.pos[0] )
+        #if distance > distance2d( ( self.pos[0] + selfCoordChange[0], self.pos[1] + selfCoordChange[1] ), otherRoomba.pos ):
+        selfCoordChange = rotate2d((GROUND_ROBOT_SPEED*PIXELS_PER_METER*ROOMBA_FRAME_DELAY/1000,0),self.rotDeg*PI/180)
+        if distance > distance2d( (self.pos[0] + selfCoordChange[0], self.pos[1] + selfCoordChange[1]), otherRoomba.pos ):
           self.bump()
-        if distance > distance2d( (otherRoomba.pos[0] + math.cos(otherRoomba.rotDeg * PI / 180), otherRoomba.pos[1] + math.sin(otherRoomba.rotDeg * PI / 180)), self.pos ):
+        otherRoombaCoordChange = rotate2d((GROUND_ROBOT_SPEED*PIXELS_PER_METER*ROOMBA_FRAME_DELAY/1000,0),otherRoomba.rotDeg*PI/180)
+        if distance > distance2d( (otherRoomba.pos[0] + otherRoombaCoordChange[0], otherRoomba.pos[1] + otherRoombaCoordChange[1]), self.pos ):
           otherRoomba.bump()
+  
     return collision
 
 
@@ -102,7 +159,8 @@ class groundRobot(roomba):
     self.stillIn = stillIn
 
   def bump(self):
-    self.turningCountdown = 0.5 * 1000/ROOMBA_FRAME_DELAY/ROOMBA_TURN_SPEED
+    if( self.turningCountdown <= 0 ):
+      self.turningCountdown = 0.5 * 1000/ROOMBA_FRAME_DELAY/ROOMBA_TURN_SPEED
 
   def tap(self):
     self.turningCountdown = 0.125 * 1000/ROOMBA_FRAME_DELAY/ROOMBA_TURN_SPEED
@@ -154,7 +212,9 @@ class obstacleRobot(roomba):
   def bump(self):
     self.go = False
     coordChange = rotate2d((GROUND_ROBOT_SPEED*PIXELS_PER_METER*ROOMBA_FRAME_DELAY/1000,0),self.rotDeg*PI/180)
-    self.pos[0] -= coordChange[0] * OBSTACLE_ROBOT_BUMP_FACTOR; self.pos[1] -= coordChange[1] * OBSTACLE_ROBOT_BUMP_FACTOR
+    # get bumped backward, to prevent roomba jams
+    self.pos[0] -= coordChange[0] * OBSTACLE_ROBOT_BUMP_FACTOR
+    self.pos[1] -= coordChange[1] * OBSTACLE_ROBOT_BUMP_FACTOR
 
   def iterate(self, times = 1 ):
     for time in range( times ):
@@ -183,15 +243,23 @@ class obstacleRobot(roomba):
 
 # for AI from JavaScript simulation
 class drone:
-  def __init__(self,X=(METERS_PER_WINDOW*PIXELS_PER_METER * 22/24),Y=(METERS_PER_WINDOW*PIXELS_PER_METER / 2),Z=(3 * PIXELS_PER_METER),XSpeed=(0),YSpeed=(0),TargetRobot=(0),OkToLeave=(True),NextRotate=(20 * DRONE_FRAME_RATE)):
+  def __init__(self,X=(METERS_PER_WINDOW*PIXELS_PER_METER * 22/24),Y=(METERS_PER_WINDOW*PIXELS_PER_METER / 2),Z=(3 * PIXELS_PER_METER),XSpeed=(0),YSpeed=(0),ZSpeed=(0),TargetRobot=(0),OkToLeave=(True),NextRotate=(20 * DRONE_FRAME_RATE)):
     self.X=X
     self.Y=Y
     self.Z=Z
     self.XSpeed=XSpeed
     self.YSpeed=YSpeed
+    self.ZSpeed=ZSpeed
     self.TargetRobot=TargetRobot
     self.OkToLeave=OkToLeave
     self.NextRotate=NextRotate
+  
+  
+  def pos(self):
+    returnable = []
+    returnable.append( self.X )
+    returnable.append( self.Y )
+    return returnable
 
   #self -> called object
   #groundRobotsPos    -> array of active ground robot's positions (x and y)
@@ -208,8 +276,9 @@ class drone:
         
         self.iterate()
         if self.NextRotate <= 0:
-          self.NextRotate = (20 * DRONE_FRAME_RATE)
-        self.NextRotate -= (DRONE_FRAME_RATE/12)
+          # 20 seconds, + 0.05 for those annoying roombas that lose synchrony
+          self.NextRotate = (20.05 * DRONE_FRAME_RATE)
+        self.NextRotate -= 1
         TargetRot = 270
 
         if self.TargetRobot >= len( groundRobotsPos ):
@@ -218,27 +287,59 @@ class drone:
       
         PrevTargetRobot = self.TargetRobot
         #alert(DataArray[CurrentFrame].Drones[index].OkToLeave + "\n" + DataArray[CurrentFrame].Drones[index].TargetRobot);
-        if(self.OkToLeave == True and self.NextRotate / DRONE_FRAME_RATE > 12 ):
+        if(self.OkToLeave == True and self.NextRotate / DRONE_FRAME_RATE > NO_TARGET_POINT ):
           TempX = 0
           TempY = 0
           self.TargetRobot = -1
+          TempScore = 0
+          scores = []
+          scoreBefore = 0 # for printing purposes
+          for k in range( len( groundRobotsPos ) ):
+            scores.append(0)
           for index2 in range( len( groundRobotsPos ) ):
             Rot = ( groundRobotsRotDeg[index2] % 360 + 360) if ( groundRobotsRotDeg[index2] % 360 < 0) else ( groundRobotsRotDeg[index2] % 360)
             TargetRot = 180 + (180 / PI) * math.atan2( groundRobotsPos[index2][1] - (METERS_PER_WINDOW * PIXELS_PER_METER * 2 / 24), groundRobotsPos[index2][0] - (METERS_PER_WINDOW * PIXELS_PER_METER / 2) );
             #print( index2, groundRobotsPos[index2][0], groundRobotsPos[index2][1], TargetRot )
-            if (Rot < TargetRot - 90 / 2 or Rot > TargetRot + 90 / 2):
+            
+            if (Rot < TargetRot - GOOD_DIRECTION_WIDTH / 2 or Rot > TargetRot + GOOD_DIRECTION_WIDTH / 2):
+              # priority #1, is the target roomba safely far from
               SafeTarget = True;
               for index3 in range( OBSTACLE_ROBOT_COUNT ):
                 A = groundRobotsPos[index2][0] - obstacleRobotsPos[index3][0]
                 B = groundRobotsPos[index2][1] - obstacleRobotsPos[index3][1]
                 if(math.sqrt(math.pow(A, 2) + math.pow(B, 2)) / PIXELS_PER_METER < (ROOMBA_RADIUS + ROOMBA_RADIUS) / PIXELS_PER_METER + 1):
                   SafeTarget = False
-              if SafeTarget:
-                if( TempX == 0 or groundRobotsPos[index2][1] < TempY ):
+              if not SafeTarget:
+                scores[index2] = 0
+              else:
+                #priority #2, is the target roomba pointing out of bounds
+                projectedPos = []
+                projectedPos.append( groundRobotsPos[index2][0] + math.cos(groundRobotsRotDeg[index2] * PI / 180) * OB_PROJECT_ROOMBA_FRAMES * GROUND_ROBOT_SPEED*PIXELS_PER_METER*ROOMBA_FRAME_DELAY/1000 )
+                projectedPos.append( groundRobotsPos[index2][1] + math.sin(groundRobotsRotDeg[index2] * PI / 180) * OB_PROJECT_ROOMBA_FRAMES * GROUND_ROBOT_SPEED*PIXELS_PER_METER*ROOMBA_FRAME_DELAY/1000 )
+                #scoreBefore = scores[index2]
+                if( not inBounds( projectedPos ) ):
+                  scores[index2] += OB_WEIGHT
+                #sys.stdout.write( "OB:" + str( scores[index2] - scoreBefore ) )
+                #sys.stdout.flush()
+                #priority #3, how close is the roomba to the green line
+                #scoreBefore = scores[index2]
+                scores[index2] += GREENLINE_WIEGHT * (METERS_PER_WINDOW*PIXELS_PER_METER - groundRobotsPos[index2][1])
+                #sys.stdout.write( "GreenLine:" + str( scores[index2] - scoreBefore ) )
+                #sys.stdout.flush()
+                #priority #4, how close is the roomba to us (bell curve)
+                #scoreBefore = scores[index2]
+                scores[index2] += CLOSENESS_WEIGHT / (CLOSENESS_WIDTH + math.pow( distance2d( groundRobotsPos[index2], self.pos() ), 2 ) )
+                #sys.stdout.write( "Closeness:" + str( scores[index2] - scoreBefore ) )
+                #sys.stdout.flush()
+                if( TempX == 0 or scores[index2] > TempScore ):
                   self.TargetRobot = index2
                   TempX = groundRobotsPos[index2][0]
                   TempY = groundRobotsPos[index2][1]
-        
+                  TempScore = scores[index2]
+      
+        else:
+          self.Z = 3 * PIXELS_PER_METER
+      
         TargetRot = 270
         
         if self.TargetRobot >= 0:
@@ -290,7 +391,7 @@ class drone:
           TargetRobotRot = groundRobotsRotDeg[self.TargetRobot]
           TargetRobotRot = ( TargetRobotRot % 360 + 360) if ( TargetRobotRot % 360 < 0) else ( TargetRobotRot % 360)
           TargetRot = 180 + (180 / PI) * math.atan2( groundRobotsPos[self.TargetRobot][1] - (METERS_PER_WINDOW * PIXELS_PER_METER * 0), groundRobotsPos[self.TargetRobot][0] - (METERS_PER_WINDOW * PIXELS_PER_METER / 2) )
-          if ( ( TargetRobotRot > TargetRot + 70 / 2 or TargetRobotRot < TargetRot - 70 / 2 ) and math.pow( ROOMBA_RADIUS * PIXELS_PER_METER, 2) > math.pow( self.X - groundRobotsPos[self.TargetRobot][0], 2) + math.pow( self.Y - groundRobotsPos[self.TargetRobot][1], 2) ):
+          if ( ( TargetRobotRot > TargetRot + GOOD_DIRECTION_WIDTH / 2 or TargetRobotRot < TargetRot - GOOD_DIRECTION_WIDTH / 2 ) and math.pow( ROOMBA_RADIUS * PIXELS_PER_METER, 2) > math.pow( self.X - groundRobotsPos[self.TargetRobot][0], 2) + math.pow( self.Y - groundRobotsPos[self.TargetRobot][1], 2) ):
             self.Z = ROOMBA_HEIGHT
             
             if groundRobotsPos[self.TargetRobot][1] > METERS_PER_WINDOW * PIXELS_PER_METER * OK_TO_LEAVE_THRESHOLD / 24:
@@ -396,7 +497,7 @@ class drone:
         TargetRot = 180 + (180 / PI) * math.atan2( groundRobotsPos[self.TargetRobot][1] - (METERS_PER_WINDOW * PIXELS_PER_METER * 0), groundRobotsPos[self.TargetRobot][0] - (METERS_PER_WINDOW * PIXELS_PER_METER / 2) )
         if ( ( TargetRobotRot > TargetRot + TRACKER_OKAY_ROT_WIDTH / 2 or TargetRobotRot < TargetRot - TRACKER_OKAY_ROT_WIDTH / 2 ) and math.pow( ROOMBA_RADIUS * PIXELS_PER_METER, 2) > math.pow( self.X - groundRobotsPos[self.TargetRobot][0], 2) + math.pow( self.Y - groundRobotsPos[self.TargetRobot][1], 2) ):
           self.Z = ROOMBA_HEIGHT
-      
+       
         else:
           self.Z = 3 * PIXELS_PER_METER
 
@@ -466,7 +567,8 @@ while seconds < 600:
 
   for k in range(OBSTACLE_ROBOT_COUNT):
     for j in range( OBSTACLE_ROBOT_COUNT ):
-      obstacleRobots[k].collision(obstacleRobots[j])
+      if j != k:
+        obstacleRobots[k].collision(obstacleRobots[j])
     obstacleRobots[k].iterate()
 
 
@@ -493,20 +595,27 @@ while seconds < 600:
 
   if frameSkip <= 0:
     screen.fill((0,0,0))
-
+    
+    pPm = PIXELS_PER_METER # pixels per meter
     for k in range(20):
-      pygame.draw.line(screen,(255,255,255),(60+(20*k),40),(60+(20*k),440),1)
-      pygame.draw.line(screen,(255,255,255),(40,60+(20*k)),(440,60+(20*k)),1)
-    pygame.draw.line(screen,(255,255,255),(40,40),(40,440),1)
-    pygame.draw.line(screen,(255,0,0),(40,440),(440,440),1)
-    pygame.draw.line(screen,(255,255,255),(440,440),(440,40),1)
-    pygame.draw.line(screen,(0,255,0),(440,40),(40,40),1)
+      pygame.draw.line(screen,(255,255,255),(3*pPm+(pPm*k),2*pPm),(3*pPm+(pPm*k),22*pPm),1)
+      pygame.draw.line(screen,(255,255,255),(2*pPm,3*pPm+(pPm*k)),(22*pPm,3*pPm+(pPm*k)),1)
+    pygame.draw.line(screen,(255,255,255),(2*pPm,2*pPm),(2*pPm,22*pPm),1)
+    pygame.draw.line(screen,(255,0,0),(2*pPm,22*pPm),(22*pPm,22*pPm),1)
+    pygame.draw.line(screen,(255,255,255),(22*pPm,22*pPm),(22*pPm,2*pPm),1)
+    pygame.draw.line(screen,(0,255,0),(22*pPm,2*pPm),(2*pPm,2*pPm),1)
     for k in range(GROUND_ROBOT_COUNT):
       pygame.draw.circle(screen, (255,255,255), (int(groundRobots[k].pos[0] + 0.5),int(groundRobots[k].pos[1] + 0.5)), int(ROOMBA_RADIUS * PIXELS_PER_METER + 0.5), 0)
+      directionLineEndPoint = []
+      directionLineEndPoint += rotate2d((DIRECTION_LINE_LENGTH,0),groundRobots[k].rotDeg * PI / 180)
+      directionLineEndPoint[0] += groundRobots[k].pos[0]
+      directionLineEndPoint[1] += groundRobots[k].pos[1]
+      pygame.draw.line(screen,(255,255,255),(int(groundRobots[k].pos[0] + 0.5),int(groundRobots[k].pos[1] + 0.5)),(int(directionLineEndPoint[0] + 0.5),int(directionLineEndPoint[1] + 0.5)),1)
     for k in range(OBSTACLE_ROBOT_COUNT):
       pygame.draw.circle(screen, (255,255,0), (int(obstacleRobots[k].pos[0] + 0.5),int(obstacleRobots[k].pos[1] + 0.5)), int(ROOMBA_RADIUS * PIXELS_PER_METER + 0.5), 0)
     for k in range( DRONE_COUNT ):
       pygame.draw.circle(screen, (255,0,255), (int(drones[k].X + 0.5),int(drones[k].Y + 0.5)), int( DRONE_RADIUS * PIXELS_PER_METER + 0.5 ), 0)
+      pygame.draw.circle(screen, (240,230,180), (int(drones[k].X + 0.5),int(drones[k].Y + 0.5 - drones[k].Z)), int( DRONE_RADIUS * PIXELS_PER_METER + 0.5 ), 0)
 
 
 
