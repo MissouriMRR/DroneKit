@@ -319,7 +319,7 @@ class Tower(object):
 
     self.STATE = VehicleStates.flying
     self.set_angle_thrust(direction, StandardThrusts.hover)
-x
+
     while(datetime.now() < end_manuever):
 
       print(self.vehicle.airspeed,)
