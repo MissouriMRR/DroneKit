@@ -243,6 +243,56 @@ class Tower(object):
     self.last_attitude = attitude
     self.last_thrust = thrust
   
+  def mission1(self,direction,speed,distance,height):
+    self.STATE = VehicleStates.takeoff
+
+    self.arm_drone()
+    self.switch_control()
+
+    initial_alt = self.vehicle.location.global_relative_frame.alt
+
+    while((self.vehicle.location.global_relative_frame.alt - initial_alt) < height):
+      self.set_angle_thrust(StandardAttitudes.level, StandardThrusts.takeoff)
+      sleep(self.STANDARD_SLEEP_TIME)
+
+    print('Reached target altitude:{0:.2f}m'.format(self.vehicle.location.global_relative_frame.alt))
+    if(direction == x):
+      duration = (distance/speed)
+      send_ned_velocity(speed, 0, 0, duration)
+    elif(direction == y):
+      duration = (distance/speed)
+      send_ned_velocity(0, speed, 0, duration)
+    elif(direction == z):
+      duration = (distance/speed)
+      send_ned_velocity(0, 0, speed, duration)
+    else:
+      print "Not a proper direction"
+      self.land()
+
+
+
+     
+  def send_ned_velocity(velocity_x, velocity_y, velocity_z, duration):
+      """
+      Move vehicle in direction based on specified velocity vectors.
+      """
+      msg = vehicle.message_factory.set_position_target_local_ned_encode(
+          0,       # time_boot_ms (not used)
+          0, 0,    # target system, target component
+          mavutil.mavlink.MAV_FRAME_LOCAL_NED, # frame
+          0b0000111111000111, # type_mask (only speeds enabled)
+          0, 0, 0, # x, y, z positions (not used)
+          velocity_x, velocity_y, velocity_z, # x, y, z velocity in m/s
+          0, 0, 0, # x, y, z acceleration (not supported yet, ignored in GCS_Mavlink)
+          0, 0)    # yaw, yaw_rate (not supported yet, ignored in GCS_Mavlink)
+
+
+      # send command to vehicle on 1 Hz cycle
+      for x in range(0,duration):
+          vehicle.send_mavlink(msg)
+          time.sleep(1)
+
+
   def hover(self, duration=None):
     self.set_angle_thrust(StandardAttitudes.level, StandardThrusts.hover)
 
