@@ -7,7 +7,7 @@ import keras
 import tensorflow as tf
 from keras.models import load_model
 from keras import backend as K
-from skimage.transform import pyramid_gaussian
+from timeit import default_timer as timer
 
 session = tf.Session()
 K.set_session(session)
@@ -50,21 +50,27 @@ def IoU(boxes, box, area=None):
     int_over_union = int_area/union_area
     return int_over_union
 
-def getDetectionWindows(img, scale, minFaceScale = MIN_FACE_SCALE):
-    resized = cv2.resize(img, None, fx = scale/minFaceScale, fy = scale/minFaceScale)
-    numDetectionWindows = numDetectionWindowsAlongAxis(resized.shape[0])*numDetectionWindowsAlongAxis(resized.shape[1])
-    detectionWindows = np.ones((numDetectionWindows, scale, scale, 3), dtype = np.uint8)
-    coords = np.ones((numDetectionWindows, 4))
-    i = 0
 
-    for yIdx in np.arange(numDetectionWindowsAlongAxis(resized.shape[0])):
-        for xIdx in np.arange(numDetectionWindowsAlongAxis(resized.shape[1])):
-            xMin, yMin, xMax, yMax = (xIdx*OFFSET, yIdx*OFFSET, xIdx*OFFSET+scale, yIdx*OFFSET+scale)
-            coords[i] = (xMin, yMin, xMax, yMax)
-            detectionWindows[i] = resized[yMin:yMax, xMin:xMax]
-            i += 1
+def getImagePyramid(img, minSize, downscale = PYRAMID_DOWNSCALE):
+    imgs = []
 
-    return (detectionWindows, coords*minFaceScale//scale)
+    while img.shape[1] >= minSize[0] and img.shape[0] >= minSize[1]:
+        imgs.append(img)
+        img = cv2.resize(img, None, fx=1/downscale, fy=1/downscale)
+
+    return imgs
+
+def getDetectionWindows(img, scale, pyrDownscale = PYRAMID_DOWNSCALE, minFaceScale = MIN_FACE_SCALE):
+    imgPyr = getImagePyramid(img, (minFaceScale, minFaceScale), PYRAMID_DOWNSCALE)
+    resized = [cv2.resize(pyrImg, None, fx = scale/minFaceScale, fy = scale/minFaceScale) for pyrImg in imgPyr]
+    numDetectionWindows = sum((numDetectionWindowsAlongAxis(resizedImg.shape[0])*numDetectionWindowsAlongAxis(resizedImg.shape[1]) for resizedImg in resized))
+    yield numDetectionWindows
+
+    for pyrLevel, resizedImg, in enumerate(resized):
+        for yIdx in np.arange(numDetectionWindowsAlongAxis(resizedImg.shape[0])):
+            for xIdx in np.arange(numDetectionWindowsAlongAxis(resizedImg.shape[1])):
+                xMin, yMin, xMax, yMax = (xIdx*OFFSET, yIdx*OFFSET, xIdx*OFFSET+scale, yIdx*OFFSET+scale)
+                yield (pyrLevel, xMin, yMin, xMax, yMax, resizedImg[yMin:yMax, xMin:xMax])
 
 def calibrateCoordinates(coords, calibPredictions):
     calibTransformations = CALIB_PATTERNS_ARR[np.argmax(calibPredictions, axis=1)]
@@ -79,22 +85,24 @@ _createModelDict = lambda: {SCALES[i][0]:None for i in range(len(SCALES))}
 @static_vars(classifiers=_createModelDict(), calibrators=_createModelDict())
 def detectMultiscale(img, minFaceScale = MIN_FACE_SCALE):
     from train import preprocessImages
+    from FaceDetection import PROFILE
     curScale = SCALES[0][0]
 
     if detectMultiscale.classifiers.get(curScale) is None:
         detectMultiscale.classifiers[curScale] = load_12net()
         detectMultiscale.calibrators[curScale] = load_12netcalib()
 
+    detectionWindowGenerator = getDetectionWindows(img, curScale, PYRAMID_DOWNSCALE)
+    totalNumDetectionWindows = next(detectionWindowGenerator)
+    detectionWindows = np.zeros((totalNumDetectionWindows, curScale, curScale, 3))
+    coords = np.zeros((totalNumDetectionWindows, 4))
 
-    numPyramidLevels = min(*(math.floor(math.log(img.shape[i]/minFaceScale, PYRAMID_DOWNSCALE)) for i in range(2)))
-    detectionWindows, coords = getDetectionWindows(img, curScale)
+    for i, (pyrLevel, xMin, yMin, xMax, yMax, detectionWindow) in enumerate(detectionWindowGenerator):
+        detectionWindows[i] = detectionWindow
+        coords[i] = (xMin, yMin, xMax, yMax)
+        coords[i] *= PYRAMID_DOWNSCALE**pyrLevel*(minFaceScale/curScale)
 
-    for i, img in enumerate(pyramid_gaussian(img, numPyramidLevels, downscale = PYRAMID_DOWNSCALE)):
-        newDetectionWindows, newCoords = getDetectionWindows(img, curScale)
-        detectionWindows = np.vstack((detectionWindows, newDetectionWindows))
-        coords = np.vstack((coords, newCoords * PYRAMID_DOWNSCALE**i))
-
-    detectionWindows = preprocessImages(detectionWindows)
+    detectionWindows = preprocessImages(detectionWindows.astype(np.float))
     predictions = detectMultiscale.classifiers[curScale]([detectionWindows, 0])[0]
     posDetectionIndices = np.where(predictions[:,1]>=.3)
 
