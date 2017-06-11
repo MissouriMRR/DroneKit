@@ -7,23 +7,26 @@ import os
 import keras
 from keras.models import Sequential, Model
 from keras.layers import Dense, Dropout, Activation, Flatten, Conv2D, MaxPooling2D, Input, concatenate
-from keras.optimizers import Adam
+from keras.optimizers import SGD
 from keras.callbacks import ModelCheckpoint
 from keras.utils import np_utils
+from keras import backend as K
 
 import tensorflow as tf
 
 from sklearn.model_selection import train_test_split
 
 from data import SCALES, FACE_DATABASE_PATHS, NEGATIVE_DATABASE_PATHS, CALIBRATION_DATABASE_PATHS, DATASET_LABEL, LABELS_LABEL, RANDOM_SEED, BATCH_SIZE
-from FaceDetection import TRAIN
+from FaceDetection import TRAIN, DEBUG
 
 PERCENT_TRAIN = .8
 NUM_EPOCHS = 300
+OPTIMIZER = SGD()
+MAIN_INPUT_LAYER_NAME = 'input0'
 
 def build12net():
     model = Sequential()
-    model.add(Conv2D(16, (3, 3), activation='relu', input_shape=(12, 12, 3)))
+    model.add(Conv2D(16, (3, 3), activation='relu', input_shape=(12, 12, 3), name=MAIN_INPUT_LAYER_NAME))
     model.add(MaxPooling2D(pool_size=(3,3),strides=2))
     model.add(Dropout(0.3))
 
@@ -32,12 +35,12 @@ def build12net():
     model.add(Dropout(0.3))
     model.add(Dense(2, activation='softmax'))
 
-    model.compile(loss='binary_crossentropy', optimizer=Adam(), metrics=['accuracy'])
+    model.compile(loss='binary_crossentropy', optimizer=OPTIMIZER, metrics=['accuracy'])
     return model
 
 def build12calibNet():
     model = Sequential()
-    model.add(Conv2D(16, (3, 3), activation='relu', input_shape=(12, 12, 3)))
+    model.add(Conv2D(16, (3, 3), activation='relu', input_shape=(12, 12, 3), name=MAIN_INPUT_LAYER_NAME))
     model.add(MaxPooling2D(pool_size=(3,3),strides=2))
     model.add(Dropout(0.3))
 
@@ -46,7 +49,7 @@ def build12calibNet():
     model.add(Dropout(0.3))
     model.add(Dense(45, activation='softmax'))
 
-    model.compile(loss='categorical_crossentropy', optimizer=Adam(), metrics=['accuracy'])
+    model.compile(loss='categorical_crossentropy', optimizer=OPTIMIZER, metrics=['accuracy'])
     return model
 
 def build24net():
@@ -72,7 +75,7 @@ def build24net():
     output = Dense(2, activation='softmax')(finalDropout)
 
     finalModel = Model(inputs=[primaryInput, secondaryInput], outputs=output)
-    finalModel.compile(loss='binary_crossentropy', optimizer=Adam(), metrics=['accuracy'])
+    finalModel.compile(loss='binary_crossentropy', optimizer=OPTIMIZER, metrics=['accuracy'])
     return finalModel
 
 def build24calibNet():
@@ -86,17 +89,13 @@ def build24calibNet():
     model.add(Dropout(0.3))
     model.add(Dense(45, activation='softmax'))
 
-    model.compile(loss='categorical_crossentropy', optimizer=Adam(), metrics=['accuracy'])
+    model.compile(loss='categorical_crossentropy', optimizer=OPTIMIZER, metrics=['accuracy'])
     return model
 
 models = {False: {SCALES[0][0]: build12net}, True: {SCALES[0][0]: build12calibNet}}
 
 def preprocessImages(X):
-    sess = tf.Session()
-    with sess.as_default():
-        X = tf.map_fn(lambda img: tf.image.per_image_standardization(img), X.astype(np.float32)).eval()
-
-    return X
+    return X/255
 
 def getTrainingSets(trainCalib, *args):
     if not trainCalib:
@@ -110,7 +109,6 @@ def getTrainingSets(trainCalib, *args):
         with h5py.File(calibDatasetFileName, 'r') as calibSamples:
             X = preprocessImages(calibSamples[DATASET_LABEL][:])
             y = calibSamples[LABELS_LABEL][:]
-
     
     return train_test_split(X, y, train_size = PERCENT_TRAIN, random_state = RANDOM_SEED)
 
@@ -122,7 +120,7 @@ def trainModel(model, X_train, X_test, y_train, y_test, numEpochs, callbacks = N
     model.fit(X_train, y_train, validation_data = (X_test, y_test), callbacks = callbacks, batch_size = BATCH_SIZE, epochs = numEpochs, verbose = 2)
 
 
-def train(stageIdx, trainCalib, numEpochs = NUM_EPOCHS):
+def train(stageIdx, trainCalib, numEpochs = NUM_EPOCHS, debug = DEBUG):
     from detect import NET_FILE_NAMES
 
     scale = SCALES[stageIdx][0]
@@ -134,7 +132,7 @@ def train(stageIdx, trainCalib, numEpochs = NUM_EPOCHS):
     fileNames = (faceDatasetFileName, negDatasetFileName) if not trainCalib else (calibDatasetFileName,)
 
     X_train, X_test, y_train, y_test = getTrainingSets(trainCalib, *fileNames)
-    callbacks = [ModelCheckpoint(fileName, monitor='val_loss', save_best_only=True, verbose=1)]
+    callbacks = [ModelCheckpoint(fileName if not DEBUG else 'debug.hdf', monitor='val_loss', save_best_only=True, verbose=1)]
     model = models[trainCalib].get(scale)()
 
     trainModel(model, X_train, X_test, y_train, y_test, numEpochs, callbacks)

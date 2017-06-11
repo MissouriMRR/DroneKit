@@ -20,7 +20,7 @@ TEST_IMAGES_FOLDER = 'Annotated Faces in the Wild/originalPics'
 
 DATASET_LABEL = 'data'
 LABELS_LABEL = 'labels'
-BATCH_SIZE = 32
+BATCH_SIZE = 128
 
 NEGATIVE_IMAGE_FOLDER = 'Negative Images/images/'
 NEGATIVE_DATABASE_PATHS = ('neg12.hdf', 'neg24.hdf', 'neg48.hdf')
@@ -32,11 +32,12 @@ OFFSET = 4
 SCALES = ((12,12),(24,24),(48,48))
 
 CALIBRATION_DATABASE_PATHS = {SCALES[0][0]:'calib12.hdf',SCALES[1][0]:'calib24.hdf',SCALES[2][0]:'calib48.hdf'}
-TARGET_NUM_CALIBRATION_SAMPLES = 200000
+TARGET_NUM_CALIBRATION_SAMPLES = 270000
 SN = (.83, .91, 1, 1.1, 1.21)
 XN = (-.17, 0, .17)
 YN = XN
 CALIB_PATTERNS = [(sn, xn, yn) for sn in SN for xn in XN for yn in YN]
+CALIB_PATTERNS_ARR = np.asarray(CALIB_PATTERNS)
 
 RANDOM_SEED = 42
 np.random.seed(RANDOM_SEED)
