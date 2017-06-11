@@ -135,6 +135,35 @@ def createNegativeDataset(stageIdx, negImgFolder = NEGATIVE_IMAGE_FOLDER, numNeg
     with h5py.File(fileName, 'w') as out:
         out.create_dataset(DATASET_LABEL, data = images, chunks = (BATCH_SIZE, *images.shape[1:]))
 
+def mineNegatives(stageIdx, negImgFolder = NEGATIVE_IMAGE_FOLDER, numNegatives = TARGET_NUM_NEGATIVES, debug = DEBUG):
+    from detect import detectMultiscale
+
+    fileName = NEGATIVE_DATABASE_PATHS[stageIdx]
+    resizeTo = SCALES[stageIdx]
+    negativeImagePaths = [os.path.join(negImgFolder, fileName) for fileName in os.listdir(negImgFolder)]
+    images = np.zeros((numNegatives, resizeTo[1], resizeTo[0], 3), dtype = np.uint8)
+    negIdx = 0
+
+    for i in np.random.permutation(len(negativeImagePaths)):
+        if negIdx >= numNegatives: break
+        img = cv2.imread(negativeImagePaths[i])
+        coords = detectMultiscale(img, 0)
+
+        for xMin, yMin, xMax, yMax in coords:
+            if negIdx >= numNegatives: break
+            xMin, yMin, w, h = squashCoords(img, xMin, yMin, xMax-xMin, yMax-yMin)
+            images[negIdx] = cv2.resize(img[yMin:yMin+h, xMin:xMin+w], resizeTo)
+            negIdx += 1
+
+        if debug: print(negIdx)
+
+    if negIdx < len(images)-1:
+        images = np.delete(images, np.s_[negIdx:], 0)
+        if debug: print(images.shape)
+
+    with h5py.File(fileName, 'w') as out:
+        out.create_dataset(DATASET_LABEL, data = images, chunks = (BATCH_SIZE, *images.shape[1:]))
+
 def createCalibrationDataset(stageIdx, numCalibrationSamples = TARGET_NUM_CALIBRATION_SAMPLES if not DEBUG else BATCH_SIZE*2, calibPatterns = CALIB_PATTERNS, debug = DEBUG):
     numCalibrationSamples = math.inf if numCalibrationSamples is None else numCalibrationSamples
     faceAnnotations = getFaceAnnotations()

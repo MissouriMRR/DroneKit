@@ -7,7 +7,6 @@ import keras
 import tensorflow as tf
 from keras.models import load_model
 from keras import backend as K
-from timeit import default_timer as timer
 
 session = tf.Session()
 K.set_session(session)
@@ -19,6 +18,7 @@ NET_FILE_NAMES = {False: {SCALES[0][0]: '12net.hdf', SCALES[1][0]: '24net.hdf'},
                   True: {SCALES[0][0]: '12calibnet.hdf', SCALES[1][0]: '24calibnet.hdf'}}
 IOU_THRESH = .5
 PYRAMID_DOWNSCALE = 2
+NET_12_THRESH = .3
 
 def to_tf_model(func):
     def decorate(*args, **kwargs):
@@ -46,10 +46,34 @@ def IoU(boxes, box, area=None):
     int_x1, int_y1, int_x2, int_y2 = ((np.maximum if i < 2 else np.minimum)(boxes[:, i], box[i]) for i in np.arange(boxes.shape[1]))
     area = (boxes[:,2]-boxes[:,0])*(boxes[:,3]-boxes[:,0]) if not area else area
     int_area = (np.maximum(0,int_x2-int_x1))*(np.maximum(0,int_y2-int_y1))
-    union_area = area+(box[2]-box[0])*(box[3]-box[1])-int_area
+    union_area = area+(box[2]-box[0]+1)*(box[3]-box[1]+1)-int_area
     int_over_union = int_area/union_area
     return int_over_union
 
+def nms(boxes, predictions, iouThresh = IOU_THRESH):
+    idxs = np.argsort(predictions)
+    picked = []
+
+    while len(idxs) > 0:
+        pick = boxes[idxs[-1]]
+        picked.append(idxs[-1])
+
+        int_over_union = IoU(boxes[idxs[:-1]], pick)
+        idxs = np.delete(idxs, np.concatenate(([len(idxs)-1],np.where(int_over_union > iouThresh)[0])))
+    
+    return boxes[picked]
+
+def local_nms(boxes, predictions, pyrIdxs, iouThresh = IOU_THRESH):
+    suppressedBoxes = np.zeros((0, *boxes.shape[1:]))
+    prevIdx = 0
+    newIdxs = []
+
+    for curIdx in pyrIdxs:
+        suppressedBoxes = np.vstack((suppressedBoxes, nms(boxes[prevIdx:curIdx], predictions[prevIdx:curIdx], iouThresh)))
+        prevIdx = curIdx
+        newIdxs.append(suppressedBoxes.shape[0])
+
+    return suppressedBoxes, newIdxs
 
 def getImagePyramid(img, minSize, downscale = PYRAMID_DOWNSCALE):
     imgs = []
@@ -83,7 +107,7 @@ def calibrateCoordinates(coords, calibPredictions):
 
 _createModelDict = lambda: {SCALES[i][0]:None for i in range(len(SCALES))}
 @static_vars(classifiers=_createModelDict(), calibrators=_createModelDict())
-def detectMultiscale(img, minFaceScale = MIN_FACE_SCALE):
+def detectMultiscale(img, maxStageIdx=len(SCALES)-1, minFaceScale = MIN_FACE_SCALE):
     from train import preprocessImages
     from FaceDetection import PROFILE
     curScale = SCALES[0][0]
@@ -96,17 +120,26 @@ def detectMultiscale(img, minFaceScale = MIN_FACE_SCALE):
     totalNumDetectionWindows = next(detectionWindowGenerator)
     detectionWindows = np.zeros((totalNumDetectionWindows, curScale, curScale, 3))
     coords = np.zeros((totalNumDetectionWindows, 4))
+    pyrIdxs = []
+    prevPyrLevel = None
 
     for i, (pyrLevel, xMin, yMin, xMax, yMax, detectionWindow) in enumerate(detectionWindowGenerator):
         detectionWindows[i] = detectionWindow
         coords[i] = (xMin, yMin, xMax, yMax)
         coords[i] *= PYRAMID_DOWNSCALE**pyrLevel*(minFaceScale/curScale)
+        
+        if pyrLevel != prevPyrLevel and pyrLevel != 0:
+            pyrIdxs.append(i)
+            prevPyrLevel = pyrLevel
 
     detectionWindows = preprocessImages(detectionWindows.astype(np.float))
-    predictions = detectMultiscale.classifiers[curScale]([detectionWindows, 0])[0]
-    posDetectionIndices = np.where(predictions[:,1]>=.3)
+    predictions = detectMultiscale.classifiers[curScale]([detectionWindows, 0])[0][:,1]
+    posDetectionIndices = np.where(predictions>=NET_12_THRESH)
 
-    calibPredictions = detectMultiscale.calibrators[curScale]([detectionWindows[posDetectionIndices], 0])[0]
+    detectionWindows = detectionWindows[posDetectionIndices]
+    calibPredictions = detectMultiscale.calibrators[curScale]([detectionWindows, 0])[0]
     coords = calibrateCoordinates(coords[posDetectionIndices], calibPredictions)
+    coords, pyrIdxs = local_nms(coords, predictions[posDetectionIndices], pyrIdxs)
 
-    return coords.astype(np.int32, copy=False)
+    if maxStageIdx == 0:
+        return coords.astype(np.int32, copy=False)
