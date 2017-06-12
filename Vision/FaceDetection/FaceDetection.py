@@ -2,10 +2,10 @@
 from timeit import default_timer as timer
 
 WINDOW_TITLE = 'Face Detector Test'
-TEST = False
+TEST = True
 
-TRAIN = True
-TRAIN_CALIB = True
+TRAIN = False
+TRAIN_CALIB = False
 
 PROFILE = True
 DEBUG = False
@@ -21,8 +21,6 @@ if __name__ == '__main__':
     from visualize import visualizer
     from detect import detectMultiscale
 
-    data.createCalibrationDataset(STAGE_IDX)
-    
     def predictionCallback(img):
         start = timer()
         detections = detectMultiscale(img)

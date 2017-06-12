@@ -24,6 +24,7 @@ NUM_EPOCHS = 300
 OPTIMIZER = SGD()
 MAIN_INPUT_LAYER_NAME = 'input0'
 SECONDARY_INPUT_LAYER_NAME = 'input1'
+INPUT_LAYER_NAME_ID = 'input'
 
 def build12net():
     model = Sequential()
