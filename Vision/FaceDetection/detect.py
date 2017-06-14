@@ -14,12 +14,13 @@ K.set_session(session)
 from data import numDetectionWindowsAlongAxis, squashCoords, MIN_FACE_SCALE, OFFSET, SCALES, CALIB_PATTERNS_ARR
 from util import static_vars
 
-NET_FILE_NAMES = {False: {SCALES[0][0]: '12net.hdf', SCALES[1][0]: '24net.hdf'}, 
-                  True: {SCALES[0][0]: '12calibnet.hdf', SCALES[1][0]: '24calibnet.hdf'}}
+NET_FILE_NAMES = {False: {SCALES[0][0]: '12net.hdf', SCALES[1][0]: '24net.hdf', SCALES[2][0]: '48net.hdf'}, 
+                  True: {SCALES[0][0]: '12calibnet.hdf', SCALES[1][0]: '24calibnet.hdf', SCALES[2][0]: '48calibnet.hdf'}}
 IOU_THRESH = .5
 PYRAMID_DOWNSCALE = 2
-NET_12_THRESH = .05
-NET_24_THRESH = .05
+NET_12_THRESH = .01
+NET_24_THRESH = .03
+NET_48_THRESH = .1
 
 def to_tf_model(func):
     from train import INPUT_LAYER_NAME_ID
@@ -54,12 +55,20 @@ def load_24net():
 def load_24netcalib():
     return load_model(NET_FILE_NAMES[True].get(SCALES[1][0]))
 
+@to_tf_model
+def load_48net():
+    return load_model(NET_FILE_NAMES[False].get(SCALES[2][0]))
+
+@to_tf_model
+def load_48netcalib():
+    return load_model(NET_FILE_NAMES[True].get(SCALES[2][0]))
+
 
 def IoU(boxes, box, area=None):
     int_x1, int_y1, int_x2, int_y2 = ((np.maximum if i < 2 else np.minimum)(boxes[:, i], box[i]) for i in np.arange(boxes.shape[1]))
-    area = (boxes[:,2]-boxes[:,0])*(boxes[:,3]-boxes[:,0]) if not area else area
+    area = (boxes[:,2]-boxes[:,0])*(boxes[:,3]-boxes[:, 1]) if not area else area
     int_area = (np.maximum(0,int_x2-int_x1))*(np.maximum(0,int_y2-int_y1))
-    union_area = area+(box[2]-box[0]+1)*(box[3]-box[1]+1)-int_area
+    union_area = area+(box[2]-box[0])*(box[3]-box[1])-int_area
     int_over_union = int_area/union_area
     return int_over_union
 
@@ -76,6 +85,7 @@ def nms(boxes, predictions, iouThresh = IOU_THRESH):
     
     return boxes[picked], picked
 
+
 def local_nms(boxes, predictions, pyrIdxs, iouThresh = IOU_THRESH):
     suppressedBoxes = np.zeros((0, *boxes.shape[1:]))
     prevIdx = 0
@@ -84,12 +94,12 @@ def local_nms(boxes, predictions, pyrIdxs, iouThresh = IOU_THRESH):
 
     for curIdx in pyrIdxs:
         localSuppressedBoxes, localPicked = nms(boxes[prevIdx:curIdx], predictions[prevIdx:curIdx], iouThresh)
-        picked.extend(localPicked)
         suppressedBoxes = np.vstack((suppressedBoxes, localSuppressedBoxes))
+        picked.extend(localPicked)
         prevIdx = curIdx
         newIdxs.append(suppressedBoxes.shape[0])
 
-    return suppressedBoxes, newIdxs, picked
+    return suppressedBoxes, picked, newIdxs
 
 def getImagePyramid(img, minSize, downscale = PYRAMID_DOWNSCALE):
     imgs = []
@@ -150,12 +160,15 @@ def detectMultiscale(img, maxStageIdx=len(SCALES)-1, minFaceScale = MIN_FACE_SCA
     for i, (pyrLevel, xMin, yMin, xMax, yMax, detectionWindow) in enumerate(detectionWindowGenerator):
         detectionWindows[i] = detectionWindow
         coords[i] = (xMin, yMin, xMax, yMax)
-        coords[i] *= PYRAMID_DOWNSCALE**pyrLevel*(minFaceScale/curScale)
-        
+        coords[i] *= PYRAMID_DOWNSCALE**pyrLevel
+
         if pyrLevel != prevPyrLevel and pyrLevel != 0:
             pyrIdxs.append(i)
             prevPyrLevel = pyrLevel
-
+        
+    coords *= minFaceScale/curScale
+    detectionWindows.shape
+    
     detectionWindows = preprocessImages(detectionWindows.astype(np.float))
     predictions = detectMultiscale.classifiers[curScale]([detectionWindows, 0])[0][:,1]
     posDetectionIndices = np.where(predictions>=NET_12_THRESH)
@@ -163,7 +176,7 @@ def detectMultiscale(img, maxStageIdx=len(SCALES)-1, minFaceScale = MIN_FACE_SCA
     detectionWindows = detectionWindows[posDetectionIndices]
     calibPredictions = detectMultiscale.calibrators[curScale]([detectionWindows, 0])[0]
     coords = calibrateCoordinates(coords[posDetectionIndices], calibPredictions)
-    coords, pyrIdxs, picked = local_nms(coords, predictions[posDetectionIndices], pyrIdxs)
+    coords, picked, pyrIdxs = local_nms(coords, predictions[posDetectionIndices], pyrIdxs)
 
     if maxStageIdx == 0:
         return coords.astype(np.int32, copy=False)
@@ -181,6 +194,22 @@ def detectMultiscale(img, maxStageIdx=len(SCALES)-1, minFaceScale = MIN_FACE_SCA
     net24_inputs = net24_inputs[posDetectionIndices]
     calibPredictions = detectMultiscale.calibrators[curScale]([net24_inputs, 0])[0]
     coords = calibrateCoordinates(coords[posDetectionIndices], calibPredictions)
-    coords, pyrIdxs, picked = local_nms(coords, predictions[posDetectionIndices], pyrIdxs)
-    return coords.astype(np.int32, copy=False)
+    coords, picked, pyrIdxs = local_nms(coords, predictions[posDetectionIndices], pyrIdxs)
 
+    if maxStageIdx == 1:
+        return coords.astype(np.int32, copy=False)
+
+    curScale = SCALES[2][0]
+
+    if detectMultiscale.classifiers.get(curScale) is None:
+        detectMultiscale.classifiers[curScale] = load_48net()
+        detectMultiscale.calibrators[curScale] = load_48netcalib()
+
+    net48_inputs = preprocessImages(getNetworkInputs(img, curScale, coords).astype(np.float))
+    predictions = detectMultiscale.classifiers[curScale]([net24_inputs[picked], net48_inputs, 0])[0][:, 1]
+    posDetectionIndices = np.where(predictions>=NET_48_THRESH)
+
+    calibPredictions = detectMultiscale.calibrators[curScale]([net48_inputs[posDetectionIndices], 0])[0]
+    coords = calibrateCoordinates(coords[posDetectionIndices], calibPredictions)
+    coords, picked = nms(coords, predictions[posDetectionIndices], .3)
+    return coords.astype(np.int32, copy=False)

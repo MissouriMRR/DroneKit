@@ -25,14 +25,14 @@ BATCH_SIZE = 128
 NEGATIVE_IMAGE_FOLDER = 'Negative Images/images/'
 NEGATIVE_DATABASE_PATHS = ('neg12.hdf', 'neg24.hdf', 'neg48.hdf')
 TARGET_NUM_NEGATIVES_PER_IMG = 40
-TARGET_NUM_NEGATIVES = 200000
+TARGET_NUM_NEGATIVES = 300000
 MIN_FACE_SCALE = 80
 OFFSET = 4
 
 SCALES = ((12,12),(24,24),(48,48))
 
 CALIBRATION_DATABASE_PATHS = {SCALES[0][0]:'calib12.hdf',SCALES[1][0]:'calib24.hdf',SCALES[2][0]:'calib48.hdf'}
-TARGET_NUM_CALIBRATION_SAMPLES = 270000
+TARGET_NUM_CALIBRATION_SAMPLES = 225000
 SN = (.83, .91, 1, 1.1, 1.21)
 XN = (-.17, 0, .17)
 YN = XN
@@ -97,8 +97,6 @@ def createFaceDataset(stageIdx, debug = DEBUG):
     with h5py.File(fileName, 'w') as out:
         out.create_dataset(DATASET_LABEL, data = images, chunks = (BATCH_SIZE, *images.shape[1:]))
 
-
-
 def createNegativeDataset(stageIdx, negImgFolder = NEGATIVE_IMAGE_FOLDER, numNegatives = TARGET_NUM_NEGATIVES, numNegativesPerImg = TARGET_NUM_NEGATIVES_PER_IMG, debug = DEBUG):
     fileName = NEGATIVE_DATABASE_PATHS[stageIdx]
     resizeTo = SCALES[stageIdx]
@@ -147,7 +145,7 @@ def mineNegatives(stageIdx, negImgFolder = NEGATIVE_IMAGE_FOLDER, numNegatives =
     for i in np.random.permutation(len(negativeImagePaths)):
         if negIdx >= numNegatives: break
         img = cv2.imread(negativeImagePaths[i])
-        coords = detectMultiscale(img, 0)
+        coords = detectMultiscale(img, stageIdx-1)
 
         for xMin, yMin, xMax, yMax in coords:
             if negIdx >= numNegatives: break

@@ -10,7 +10,7 @@ TRAIN_CALIB = False
 PROFILE = True
 DEBUG = False
 
-STAGE_IDX = 1
+STAGE_IDX = 2
 
 GREEN = (0, 255, 0)
 THICKNESS = 3

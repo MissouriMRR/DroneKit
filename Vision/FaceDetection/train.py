@@ -7,6 +7,7 @@ import os
 import keras
 from keras.models import Sequential, Model
 from keras.layers import Dense, Dropout, Activation, Flatten, Conv2D, MaxPooling2D, Input, concatenate
+from keras.layers.normalization import BatchNormalization
 from keras.optimizers import SGD
 from keras.callbacks import ModelCheckpoint
 from keras.utils import np_utils
@@ -56,23 +57,24 @@ def build12calibNet():
 
 def build24net():
     model = Sequential()
-    model.add(Conv2D(64, (5, 5), activation='relu', input_shape=(24,24,3), name=MAIN_INPUT_LAYER_NAME))
+    model.add(Conv2D(64, (5, 5), activation='relu', input_shape=(24,24,3)))
     model.add(MaxPooling2D(pool_size=(3,3),strides=2))
     model.add(Dropout(0.3))
 
     model.add(Flatten())
     model.add(Dense(128, activation='relu'))
 
-    secondaryInput = Input(shape=(12,12,3), name=SECONDARY_INPUT_LAYER_NAME)
+    secondaryInput = Input(shape=(12,12,3), name = SECONDARY_INPUT_LAYER_NAME)
     convLayer = Conv2D(16, (3, 3), activation='relu')(secondaryInput)
     poolingLayer = MaxPooling2D((3,3), strides=2)(convLayer)
+    firstDropoutLayer = Dropout(.3)(poolingLayer)
 
     flattened = Flatten()(poolingLayer)
     secondaryOutput = Dense(16, activation='relu')(flattened)
-    dropoutLayer = Dropout(0.3)(secondaryOutput)
+    secondDropoutLayer = Dropout(0.3)(secondaryOutput)
 
-    primaryInput = Input(shape=(24,24,3))
-    merged = concatenate([model(primaryInput), dropoutLayer])
+    primaryInput = Input(shape=(24,24,3), name = MAIN_INPUT_LAYER_NAME)
+    merged = concatenate([model(primaryInput), secondDropoutLayer])
     finalDropout = Dropout(0.3)(merged)
     output = Dense(2, activation='softmax')(finalDropout)
 
@@ -94,8 +96,59 @@ def build24calibNet():
     model.compile(loss='categorical_crossentropy', optimizer=OPTIMIZER, metrics=['accuracy'])
     return model
 
-models = {False: {SCALES[0][0]: build12net, SCALES[1][0]: build24net}, 
-          True: {SCALES[0][0]: build12calibNet, SCALES[1][0]: build24calibNet}}
+def build48net():
+    model = Sequential()
+    model.add(Conv2D(64, (5, 5), activation='relu', input_shape=(48,48,3)))
+    model.add(MaxPooling2D(pool_size=(3,3),strides=2))
+    model.add(Dropout(0.3))
+    model.add(BatchNormalization())
+    model.add(Conv2D(64, (5, 5), activation='relu'))
+    model.add(BatchNormalization())
+    model.add(MaxPooling2D(pool_size=(3,3),strides=2))
+    model.add(Dropout(0.3))
+
+    model.add(Flatten())
+    model.add(Dense(256, activation='relu'))
+    model.add(Dropout(0.3))
+
+    secondaryInput = Input(shape=(24, 24, 3), name = SECONDARY_INPUT_LAYER_NAME)
+    convLayer = Conv2D(64, (5, 5), activation='relu')(secondaryInput)
+    poolingLayer = MaxPooling2D((3,3), strides=2)(convLayer)
+    firstDropoutLayer = Dropout(.3)(poolingLayer)
+
+    flattened = Flatten()(poolingLayer)
+    secondaryOutput = Dense(128, activation='relu')(flattened)
+    secondDropoutLayer = Dropout(0.3)(secondaryOutput)
+
+    primaryInput = Input(shape=(48,48,3), name = MAIN_INPUT_LAYER_NAME)
+    merged = concatenate([model(primaryInput), secondDropoutLayer])
+    finalDropout = Dropout(0.3)(merged)
+    output = Dense(2, activation='softmax')(finalDropout)
+
+    finalModel = Model(inputs=[primaryInput, secondaryInput], outputs=output)
+    finalModel.compile(loss='binary_crossentropy', optimizer=OPTIMIZER, metrics=['accuracy'])
+    return finalModel
+
+def build48calibNet():
+    model = Sequential()
+    model.add(Conv2D(64, (5, 5), activation='relu', input_shape=(48,48,3), name=MAIN_INPUT_LAYER_NAME))
+    model.add(MaxPooling2D(pool_size=(3,3),strides=2))
+    model.add(Dropout(0.3))
+    model.add(BatchNormalization())
+    model.add(Conv2D(64, (5, 5), activation='relu'))
+    model.add(BatchNormalization())
+    model.add(Dropout(0.3))
+
+    model.add(Flatten())
+    model.add(Dense(256, activation='relu'))
+    model.add(Dropout(0.3))
+    model.add(Dense(45, activation='softmax'))
+
+    model.compile(loss='categorical_crossentropy', optimizer=OPTIMIZER, metrics=['accuracy'])
+    return model
+
+models = {False: {SCALES[0][0]: build12net, SCALES[1][0]: build24net, SCALES[2][0]: build48net}, 
+          True: {SCALES[0][0]: build12calibNet, SCALES[1][0]: build24calibNet, SCALES[2][0]: build48calibNet}}
 
 def preprocessImages(X):
     return X/255
