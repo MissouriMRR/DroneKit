@@ -107,9 +107,9 @@ class Tower(object):
     self.STATE = VehicleStates.unknown
 
   def initialize(self, should_write_to_file=False):
-    """ 
+    """
     @purpose: Connect to the flight controller, start the failsafe
-              thread, switch to GUIDED_NOGPS, and open a file to 
+              thread, switch to GUIDED_NOGPS, and open a file to
               begin logging.
     @args:
     @returns:
@@ -121,7 +121,7 @@ class Tower(object):
         sys.stdout = self.flight_log
 
       print("\nConnecting via USB to PixHawk...")
-      self.vehicle = dronekit.connect(self.USB, wait_ready=True)
+      self.vehicle = dronekit.connect(self.USB_DEV, wait_ready=True)
 
       if not self.vehicle:
         print("\nUnable to connect to vehicle.")
@@ -133,13 +133,13 @@ class Tower(object):
       self.failsafes = FailsafeController(self)
       self.failsafes.start()
       self.start_time = time.time()
-      
+
       self.switch_control()
-      
+
       print("\nSuccessfully connected to vehicle.")
 
-  def shutdown(self):    
-    """ 
+  def shutdown(self):
+    """
     @purpose: Stop all operations and cleanup the vehicle object.
     @args:
     @returns:
@@ -151,7 +151,7 @@ class Tower(object):
     self.start_time = 0
 
   def arm_drone(self):
-    """ 
+    """
     @purpose: Arm the vehicle.
     @args:
     @returns:
@@ -161,7 +161,7 @@ class Tower(object):
       sleep(self.STANDARD_SLEEP_TIME)
 
   def disarm_drone(self):
-    """ 
+    """
     @purpose: Disarm the vehicle.
     @args:
     @returns:
@@ -171,8 +171,8 @@ class Tower(object):
       sleep(self.STANDARD_SLEEP_TIME)
 
   def switch_control(self):
-    """ 
-    @purpose: Switch the mode to GUIDED_NOGPS and make sure 
+    """
+    @purpose: Switch the mode to GUIDED_NOGPS and make sure
              that the failsafe thread is running.
     @args:
     @returns:
@@ -186,7 +186,7 @@ class Tower(object):
         sleep(self.STANDARD_SLEEP_TIME)
 
   def get_uptime(self):
-    """ 
+    """
     @purpose: Get up time of this object.
     @args:
     @returns:
@@ -195,10 +195,10 @@ class Tower(object):
     return uptime
 
   def map(self, x, in_min, in_max, out_min, out_max):
-    """ 
+    """
     @purpose: Re-maps a number from one range to another.
-    
-    @args: 
+
+    @args:
       x: the number to map
       in_min: the lower bound of the value's current range
       in_max: the upper bound of the value's current range
@@ -211,27 +211,27 @@ class Tower(object):
     return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min
 
   def set_angle_thrust(self, attitude, thrust):
-    """ 
+    """
     @purpose: Send an specified attitude message to the
               flight controller. For more information, see
               http://mavlink.org/messages/common#SET_ATTITUDE_TARGET.
-    
-    @args: 
+
+    @args:
       attitude: A DroneAtittude object containing a target attitude.
       thrust: A collective thrust from 0 to 1. Thrust is converted to
-              a climb rate internally by the flight controller. Therefore, 
+              a climb rate internally by the flight controller. Therefore,
               thrusts from 0.51 to 1 are climb rates and thrusts from 0.49
               to 0 are descent rates. 0.50 attempts to maintain a hover.
     @returns:
     """
     while(self.vehicle.mode.name != "GUIDED_NOGPS"):
       sleep(self.STANDARD_SLEEP_TIME)
-    
+
     message = self.vehicle.message_factory.set_attitude_target_encode(
       0,                                 # Timestamp in milliseconds since system boot (not used).
       0,                                 # System ID
       0,                                 # Component ID
-      self.STANDARD_ATTITUDE_BIT_FLAGS,  # Bit flags. 
+      self.STANDARD_ATTITUDE_BIT_FLAGS,  # Bit flags.
       attitude.quaternion,               # Attitude quaternion.
       0,                                 # Body roll rate.
       0,                                 # Body pitch rate.
@@ -242,7 +242,7 @@ class Tower(object):
     self.vehicle.commands.upload()
     self.last_attitude = attitude
     self.last_thrust = thrust
-  
+
   def mission1(self,direction,speed,distance,height):
     self.STATE = VehicleStates.takeoff
 
@@ -266,12 +266,12 @@ class Tower(object):
       duration = (distance/speed)
       send_ned_velocity(0, 0, speed, duration)
     else:
-      print "Not a proper direction"
+      print ("Not a proper direction")
       self.land()
 
 
 
-     
+
   def send_ned_velocity(velocity_x, velocity_y, velocity_z, duration):
       """
       Move vehicle in direction based on specified velocity vectors.
@@ -342,7 +342,7 @@ class Tower(object):
 
       if(updated_attitude.roll_deg < -self.MAX_ANGLE_ALL_AXIS):
         updated_attitude.roll_deg = -self.MAX_ANGLE_ALL_AXIS
-      
+
       if(updated_attitude.roll_deg > self.MAX_ANGLE_ALL_AXIS):
         updated_attitude.roll_deg = self.MAX_ANGLE_ALL_AXIS
 
@@ -360,7 +360,7 @@ class Tower(object):
       print(updated_attitude.pitch_deg,)
 
       sleep(self.STANDARD_SLEEP_TIME)
-    
+
     if(should_hover_on_finish):
       # self.hover()
       pass
@@ -378,15 +378,15 @@ class Tower(object):
       return
 
     self.STATE = VehicleStates.flying
-      
+
     max_angle = math.radians(desired_angle)
     altitude_to_hold = self.vehicle.location.global_relative_frame.alt
 
     duration = timedelta(seconds=duration)
     end_manuever = datetime.now() + duration
-    
+
     self.fly_for_time(1, StandardAttitudes.forward, self.TURN_START_VELOCITY, False)
-    
+
     while(end_manuever <= datetime.now()):
       change_in_time = end_manuever - datetime.now()
       current_altitude = self.vehicle.location.global_relative_frame.alt
@@ -412,9 +412,19 @@ class Tower(object):
         max_angle = math.radians(desired_angle)
 
       sleep(self.STANDARD_SLEEP_TIME)
-      
+
     self.fly_for_time(1, StandardAttitudes.forward, self.vehicle.airspeed, True)
-    
+
+  def checkGimbal(self):
+      degYaw = int(math.degrees(self.vehicle.attitude.yaw))
+      degPitch = int(math.degrees(self.vehicle.attitude.pitch))
+      degRoll = int(math.degrees(self.vehicle.attitude.roll))
+      print("\nYaw: {0}".format(degYaw))
+      print("\nPitch: {0}".format(degPitch))
+      print("\nRoll: {0}".format(degRoll))
+      valChange = str(degPitch) + " " + str(degRoll)+ " "
+      print("\n"+valChange)
+      pass
   def check_sonar_sensors(self):
     # sonar = Sonar.Sonar(2,3, "Main")
     # print("%s Measured Distance = %.1f cm" % (sonar.getName(), sonar.getDistance()))
@@ -444,6 +454,7 @@ class FailsafeController(threading.Thread):
   def run(self):
     while not self.stoprequest.isSet():
       if self.atc.STATE == VehicleStates.hover or self.atc.STATE == VehicleStates.flying:
+        self.atc.checkGimbal()
         self.atc.check_sonar_sensors()
         self.atc.check_battery_voltage()
         sleep(self.atc.FAILSAFES_SLEEP_TIME)
@@ -456,4 +467,3 @@ class FailsafeController(threading.Thread):
     self.stoprequest.set()
     # GPIO.cleanup()
     super(FailsafeController, self).join(timeout)
-
