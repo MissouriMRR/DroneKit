@@ -2,12 +2,15 @@
 from timeit import default_timer as timer
 
 WINDOW_TITLE = 'Face Detector Test'
-TEST = True
+TEST = False
 
 TRAIN = False
 TRAIN_CALIB = False
 
-PROFILE = True
+LIVE_WINDOW_TITLE = 'RealSense Test'
+LIVE = True
+
+PROFILE = False
 DEBUG = False
 
 STAGE_IDX = 2
@@ -18,12 +21,13 @@ THICKNESS = 3
 if __name__ == '__main__':
     import cv2
     import data
-    from visualize import visualizer
+    from visualize import visualizer, cv2Window
     from detect import detectMultiscale
 
     def predictionCallback(img):
         start = timer()
         detections = detectMultiscale(img)
+
         if PROFILE:
             print('Prediction took %fs' % (timer() - start,))
         
@@ -36,4 +40,9 @@ if __name__ == '__main__':
     elif TRAIN:
         from train import train
         train(STAGE_IDX, TRAIN_CALIB)
-        
+    elif LIVE:
+        from RealSense import Streamer, LiveDisplay
+
+        with cv2Window(LIVE_WINDOW_TITLE) as win, Streamer() as stream:
+            liveStream = LiveDisplay(stream, win)
+            liveStream.run(predictionCallback)

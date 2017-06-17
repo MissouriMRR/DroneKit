@@ -17,7 +17,7 @@ from util import static_vars
 NET_FILE_NAMES = {False: {SCALES[0][0]: '12net.hdf', SCALES[1][0]: '24net.hdf', SCALES[2][0]: '48net.hdf'}, 
                   True: {SCALES[0][0]: '12calibnet.hdf', SCALES[1][0]: '24calibnet.hdf', SCALES[2][0]: '48calibnet.hdf'}}
 IOU_THRESH = .5
-PYRAMID_DOWNSCALE = 2
+PYRAMID_DOWNSCALE = 1.5
 NET_12_THRESH = .01
 NET_24_THRESH = .03
 NET_48_THRESH = .1
@@ -211,5 +211,5 @@ def detectMultiscale(img, maxStageIdx=len(SCALES)-1, minFaceScale = MIN_FACE_SCA
 
     calibPredictions = detectMultiscale.calibrators[curScale]([net48_inputs[posDetectionIndices], 0])[0]
     coords = calibrateCoordinates(coords[posDetectionIndices], calibPredictions)
-    coords, picked = nms(coords, predictions[posDetectionIndices], .3)
+    coords, picked = nms(coords, predictions[posDetectionIndices], .5)
     return coords.astype(np.int32, copy=False)
