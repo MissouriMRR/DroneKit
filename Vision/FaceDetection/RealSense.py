@@ -96,7 +96,7 @@ class LiveDisplay():
 
 		while not quit:
 			img = self.stream.next()
-			if callback is not None: zcallback(img)
+			if callback is not None: callback(img)
 			self.window.show(img)
 
 			frames += 1
