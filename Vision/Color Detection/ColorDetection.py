@@ -1,38 +1,24 @@
 import numpy as np
-import contextlib
 import cv2
 
-WINDOW_TITLE = 'Press space to take a picture!' 
+from RealSense import Streamer, LiveDisplay
 
-trackbars = {}.fromkeys( ( 'min h', 'max h', 'min s', 'max s', 'min v', 'max v' ), 0 )
+WINDOW_TITLE = 'Color Detection Test' 
+EXIT_KEY = 'q'
 
-def nothing( x ): print( x )
+TEST = True
 
-class WebcamCapture( contextlib.AbstractContextManager ):
-    def __init__( self, devId = 0 ):
-        self.devId = devId
+TRACKBAR_NAMES = ( 'min h', 'max h', 'min s', 'max s', 'min v', 'max v' )
+trackbars = {}.fromkeys( TRACKBAR_NAMES, 0 )
 
-    def __enter__( self ):
-        self.cap = cv2.VideoCapture( self.devId )
-        return self
-
-    def __exit__( self, *args ):
-        self.cap.release( )
-
-    def __iter__( self ):
-        return self
-
-    def __next__( self ):
-        if not self.cap.isOpened( ):
-            raise StopIteration
-        
-        return self.cap.read( )
+def update( val, trackbarName ):
+    trackbars[trackbarName] = val
 
 class cv2Window( ):
-    def __init__( self, name, type = cv2.WINDOW_AUTOSIZE, quitOnKey = 'q' ):
+    def __init__( self, name, type = cv2.WINDOW_AUTOSIZE ):
         self.name = name
+        self.title = name
         self.type = type
-        self.quitOnKey = ord( quitOnKey )
 
     def __enter__( self ):
         cv2.namedWindow( self.name, self.type )
@@ -41,15 +27,24 @@ class cv2Window( ):
     def __exit__( self, *args ):
         cv2.destroyWindow( self.name )
 
-    def addTrackbar( self, name, min, max, callback = nothing ):
+    def getTitle(self):
+        return self.title
+
+    def setTitle(self, new_title):
+        self.title = new_title
+        cv2.setWindowTitle(self.name, self.title)
+
+    def addTrackbar( self, name, min, max, callback = lambda *args: None ):
         cv2.createTrackbar( name, self.name, min, max, callback )
+
+    def isKeyDown(self, key):
+        return cv2.waitKey( 1 ) & 0xFF == ord(key)
+
+    def getKey(self):
+        return chr(cv2.waitKey( 1 ) & 0xFF)
 
     def show( self, mat ):
         cv2.imshow( self.name, mat )
-        return cv2.waitKey( 1 ) & 0xFF != self.quitOnKey
-
-def update( trackbarName, val ):
-    trackbars[trackbarName] = val
 
 def thresholdFrameByHSV( frame ):
     min = np.array( [trackbars['min h'], trackbars['min s'], trackbars['min v']], np.uint8 )
@@ -60,12 +55,13 @@ def thresholdFrameByHSV( frame ):
 
     return cv2.bitwise_and( frame, frame, mask = mask )
 
-MIN_RED = np.array( [0, 203, 0], np.uint8 )
-MAX_RED = np.array( [8, 255, 157], np.uint8 )
+MIN_RED = np.array( [0, 165, 54], np.uint8 )
+MAX_RED = np.array( [180, 255, 171], np.uint8 )
 
 def detectRedObject( frame ):
     hsv = cv2.cvtColor( frame, cv2.COLOR_BGR2HSV )
     mask = cv2.inRange( hsv, MIN_RED, MAX_RED )
+    mask = cv2.morphologyEx( mask, cv2.MORPH_CLOSE, np.ones((5,5),np.uint8) )
 
     image, contours, hierarchy = cv2.findContours(mask, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE )
     
@@ -78,14 +74,12 @@ def detectRedObject( frame ):
         cv2.drawContours( frame, [box], 0, (0,255, 0), 3 )
 
 
-with WebcamCapture( ) as webcam, cv2Window( WINDOW_TITLE ) as window:
-    #for trackbarName in trackbars:
-    #    window.addTrackbar( trackbarName, 0, 180 if 'h' in trackbarName else 255, lambda val, trackbarName = trackbarName: update( trackbarName, val ) )
+with cv2Window(WINDOW_TITLE) as win, Streamer() as stream:
+    liveStream = LiveDisplay(stream, win)
+    if TEST:
+        liveStream.run(lambda frame: detectRedObject(frame))
+    else:
+        for name in TRACKBAR_NAMES: 
+            win.addTrackbar(name, 0, 255 if 'h' not in name else 180, lambda val, name = name: update(val, name))
 
-    for status, frame in webcam:
-        if status:
-            detectRedObject( frame )
-
-            if not window.show( frame ):
-                break
-
+        liveStream.run(lambda frame: thresholdFrameByHSV(frame))

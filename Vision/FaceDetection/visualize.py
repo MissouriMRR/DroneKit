@@ -7,6 +7,7 @@ from data import SCALES
 class cv2Window( ):
     def __init__( self, name, type = cv2.WINDOW_AUTOSIZE ):
         self.name = name
+        self.title = name
         self.type = type
 
     def __enter__( self ):
@@ -15,6 +16,13 @@ class cv2Window( ):
 
     def __exit__( self, *args ):
         cv2.destroyWindow( self.name )
+
+    def getTitle(self):
+        return self.title
+
+    def setTitle(self, new_title):
+        self.title = new_title
+        cv2.setWindowTitle(self.name, self.title)
 
     def isKeyDown(self, key):
         return cv2.waitKey( 1 ) & 0xFF == ord(key)
