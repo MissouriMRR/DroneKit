@@ -22,6 +22,7 @@ import math
 import os
 import time
 import threading
+import serial
 
 class DroneAttitude():
 
@@ -424,7 +425,11 @@ class Tower(object):
       print("\nRoll: {0}".format(degRoll))
       valChange = str(degPitch) + " " + str(degRoll)+ " "
       print("\n"+valChange)
+      gimbal = serial.Serial("/dev/ttyS1", 115200, timeout=10)
+      gimbal.write(valChange)
+      gimbal.close()
       pass
+
   def check_sonar_sensors(self):
     # sonar = Sonar.Sonar(2,3, "Main")
     # print("%s Measured Distance = %.1f cm" % (sonar.getName(), sonar.getDistance()))
