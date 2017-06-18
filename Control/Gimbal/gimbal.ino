@@ -1,39 +1,45 @@
 /*
- * @author: jstuder
- * 
- */
+   @author: jstuder
+
+*/
 #include <Servo.h>
+#include <SoftwareSerial.h>
+
+const byte rxPin = 3;
+const byte txPin = 4;
+
+SoftwareSerial upBoard (rxPin, txPin);  //Creating a software serial for the Arduino Nano
 
 //the servo to counter the pitch of the drone
 Servo pitch, roll;
 const int PARALLEL = 50; //45 allows for 30 degrees of + and - with ease
-const int PERPENDICULAR = PARALLEL + 90; 
+const int PERPENDICULAR = PARALLEL + 90;
 
 //A constant to control the speed of angle change, lower is faster
 const int SPEED = 10;
 
 /*
- * @parameters
- *  byte angle -> the angle you want to go to
- *  int speed -> the delay between a move of 1 degree (lower is faster)
- */
+   @parameters
+    byte angle -> the angle you want to go to
+    int speed -> the delay between a move of 1 degree (lower is faster)
+*/
 void goToAngle(byte pitchAngle, byte rollAngle, int speed);
 
 /*
- * @parameters
- * bool isPLL -> true if gimbal needs to be parallel to the ground, false if it
- *               needs to be perpendicular
- * int xAdj -> pass a positive or negative value to adjust the left-right axis of the gimbal
- *             (modifies servo2)
- * int yAdj -> pass a positive or negative value to adjust the forward-backward axis of the gimbal
- *             (modifies pitch)
- */
+   @parameters
+   bool isPLL -> true if gimbal needs to be parallel to the ground, false if it
+                 needs to be perpendicular
+   int xAdj -> pass a positive or negative value to adjust the left-right axis of the gimbal
+               (modifies servo2)
+   int yAdj -> pass a positive or negative value to adjust the forward-backward axis of the gimbal
+               (modifies pitch)
+*/
 void mntn(bool isPLL, byte rAdj, byte pAdj);
 
 void setup() {
 
   //assigns analog pin 0 to output
-  pinMode(A0,OUTPUT);
+  pinMode(A0, OUTPUT);
   pinMode(A2, OUTPUT);
   pitch.attach(A0); //attaches pitch to analog 0
   roll.attach(A2);
@@ -42,26 +48,30 @@ void setup() {
   goToAngle(50, 40, SPEED); //sets the gimbal to parallel as default
 
   //enables serial
-  Serial1.begin(115200);  
+  //SoftwareSerial upBoard (rxPin, txPin);
+  upBoard.begin(115200);
   Serial.begin(115200);
   Serial.println("Ready");
-  Serial1.println("hello??");
+   
+  upBoard.println("hello??");
+  
 }
 
-void loop() 
+void loop()
 {
+ 
   //used to track parallel or perpendicular
   static boolean isParallel = true;
-  if (Serial1.available())
+  if (upBoard.available())
   {
     //reads as a string to allow for 'change' to be a condition
     String in;
     int i = 0;
-    in = Serial1.readString();
+    in = upBoard.readString();
     Serial.println(in);
     char inC[in.length()];
     in.toCharArray(inC, in.length());
-    
+
     //allows yChange to default to the previous value. If input is invalid the gimbal doesn't move.
     byte pChange = pitch.read();
     byte rChange = roll.read();
@@ -83,13 +93,13 @@ void loop()
         rString += inC[count];
         count++;
       } while (inC[count] != ' ');
-      
+
       do
       {
         pString += inC[count];
         count++;
       } while (inC[count] != ' ');
-      
+
       rChange = rString.toInt();
       pChange = pString.toInt();
 
@@ -100,6 +110,7 @@ void loop()
     //calls the "maintain" function
     mntn(isParallel, rChange, pChange);
   }
+ 
 }
 
 void mntn(bool isPLL, byte rAdj, byte pAdj)
@@ -126,7 +137,7 @@ void goToAngle(byte pitchAngle, byte rollAngle, int speed)
 {
   byte currentPAngle = pitch.read();
   byte currentRAngle = roll.read();
-  if(pitchAngle > currentPAngle)
+  if (pitchAngle > currentPAngle)
   {
     for (int i = currentPAngle; i < pitchAngle; i++)
     {
@@ -143,7 +154,7 @@ void goToAngle(byte pitchAngle, byte rollAngle, int speed)
     }
   }
 
-  if(rollAngle > currentRAngle)
+  if (rollAngle > currentRAngle)
   {
     for (int i = currentRAngle; i < rollAngle; i++)
     {
