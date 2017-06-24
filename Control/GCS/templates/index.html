@@ -3,29 +3,56 @@
 <head>
   <meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1.0"/>
-  <title>MST MRR Github</title>
+  
+  <title>MRR-GLADIS</title>
+
   <!-- Google Fonts -->
   <link href='https://fonts.googleapis.com/css?family=Roboto:400,300,500,700' rel='stylesheet' type='text/css'>
 
   <!-- CSS  -->
   <link rel="stylesheet" href="static/css/turretcss.min.css">
+  <link rel="stylesheet" href="static/css/nprogress.css">
   <link rel="stylesheet" href="static/css/base.css">
 
 </head>
+
+{% raw %}
+
 <body>
 
-  <div class="flex-container page column">
 
-  <div class="centered" style="max-width: 1000px;">
+  <div id="app" class="flex-container page column">
 
-    <div style="margin-bottom: 25px;">
-      <div class="huge-header">MST-MRR</div>
-      <p>This page isn't quite ready yet.</p>
+    <div id="loading_screen"class="centered" style="max-width: 1000px;">
+
+      <div style="margin-bottom: 25px;">
+        <div class="huge-header">gladIS </div>
+        <p>{{ message }}</p>
+
+        <div class="card">
+
+          <h2>Battery</h2>
+
+        </div>
+
+        <div class="card">
+
+          <h2>State and Atittude/Altitude</h2>
+          
+        </div>
+
+        <div class="card">
+
+          <h2>Coordinates</h2>
+          
+        </div>
+
+      </div>
+
     </div>
 
   </div>
-
-  </div>
+  
 
   <div class="footer">
     Missouri University of Science and Technology &copy; 
@@ -33,9 +60,18 @@
     <script type="text/javascript">
       document.write(new Date().getFullYear());
     </script>
-    
+  
   </div>
 
+  <script src="static/js/socket.io.js"></script>    
+
+  <script src="static/js/nprogress.js"></script>    
+
+  <script src="static/js/vue.js"></script>    
+   
+  <script src="static/js/app.js"></script>    
 
 </body>
+
+{% endraw %}
 </html>

@@ -270,9 +270,6 @@ class Tower(object):
       print ("Not a proper direction")
       self.land()
 
-
-
-
   def send_ned_velocity(velocity_x, velocity_y, velocity_z, duration):
       """
       Move vehicle in direction based on specified velocity vectors.
