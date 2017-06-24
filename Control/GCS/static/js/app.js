@@ -3,15 +3,22 @@ new Vue({
   el: '#app',
   
   data: {
-    message: 'Hello Vue!',
-    socket: null
+    loading_message: 'Connecting to server...',
+    socket: null,
+    battery_percentage: 85
   },
 
   created: function()
   {
     socket = io.connect('http://' + document.domain + ':' + location.port);
-    socket.on('connect', function() {
-        socket.emit('my event', {data: 'I\'m connected!'});
+
+    socket.on('connect', function(data) {
+        console.log("Connected to server...");
+        loading_message = data;
+    });
+
+    socket.on('status', function(data) {
+      console.log(data);
     });
   },
 
@@ -19,7 +26,7 @@ new Vue({
   {
 
 
-    console.log("Microsoft office.");
+
   }
 
 })
