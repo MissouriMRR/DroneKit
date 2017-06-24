@@ -1,0 +1,108 @@
+html, body {
+  font-family: 'Roboto', sans-serif;
+  font-weight: 300;
+  background-color: #ecf0f1;
+  height: 100%;
+  width: 100%;
+}
+
+p {
+  font-family: 'Roboto', sans-serif;
+  font-weight: 300;
+  font-size: 1.5rem;
+
+}
+
+h1 {
+  font-family: 'Roboto', sans-serif;
+  font-weight: 300;
+
+}
+
+/**************** CONTAINERS AND LAYOUT HELPERS *****************/
+.soft-centered {
+  margin-top: 6rem;
+  margin-bottom: 4rem;
+}
+.flex-container {
+  display: -ms-flexbox;
+  display: -webkit-flex;
+  display: flex;
+  flex: auto;
+  height: 100%;
+  width: 100%;
+}
+.flex-container.row {
+  flex-direction: row;
+}
+
+.flex-container.column {
+  flex-direction: column;
+}
+
+.flex-container.page {
+  height: 90%;
+}
+
+.flex-container .centered{
+  margin: auto;
+  text-align: center;
+}
+
+.flex-container .true-centered {
+  -webkit-box-align: center;
+  -moz-box-align: center;
+  -ms-flex-align: center;
+  -webkit-align-items: center;
+  align-items: center;
+
+  -webkit-box-pack: center;
+  -moz-box-pack: center;
+  -ms-flex-pack: center;
+  -webkit-justify-content: center;
+  justify-content: center;
+}
+
+.huge-header {
+  font-size: 64px;
+  margin-bottom: 0px;
+}
+
+.navbar {
+  display: -ms-flexbox;
+  display: -webkit-flex;
+  display: flex;
+  justify-content: flex-end; /* align horizontal */
+  align-items: center; /* align vertical */
+  width: 100%;
+  height: 8%;
+  padding: 5px 15px 5px 15px;
+  top:0;
+  font-weight: 500;
+  font-size: 14px;
+}
+
+
+.footer {
+  display: -ms-flexbox;
+  display: -webkit-flex;
+  display: flex;
+  justify-content: center; /* align horizontal */
+  align-items: center; /* align vertical */
+  width: 100%;
+  height: 5%;
+  position:fixed;
+  bottom:0;
+  background-color: inherit;
+  text-align: center;
+  font-weight: 500;
+  font-size: 14px;
+}
+
+.card {
+  font-size: 18px;
+  background: #f8f8f8;
+  border: 1px solid #ddd;
+  padding: 25px;
+  position: relative;
+}
