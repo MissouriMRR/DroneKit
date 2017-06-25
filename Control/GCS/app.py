@@ -11,7 +11,19 @@ app = Flask(__name__)
 app.config['SECRET_KEY'] = 'secret!'
 socketio = SocketIO(app)
 
-# tower = Tower()
+tower = Tower()
+
+def get_battery():
+    return tower.vehicle.batter.voltage
+
+def get_vehicle_status():
+    """Laundry list function.
+
+    """
+    get_battery()
+    status = {}
+    status['battery'] = get_battery()
+    return status
 
 @app.route('/')
 def index():
@@ -20,7 +32,11 @@ def index():
 @socketio.on('connect')
 def on_connect():
     send('Initialization in progress...')
-    emit('status', {'data': 42})
+    emit('status', {'status': get_vehicle_status()})
+    # emit('status', {'status': 'hello world'})
+
+
+
 
 if __name__ == '__main__':
     socketio.run(app, debug=True)
