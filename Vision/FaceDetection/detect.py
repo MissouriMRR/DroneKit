@@ -1,15 +1,11 @@
-#!/usr/bin/env python3.5
 import math
-
 import cv2
 import numpy as np
-import keras
-import tensorflow as tf
-from keras.models import load_model
-from keras import backend as K
 
-session = tf.Session()
-K.set_session(session)
+import keras
+from keras.models import load_model
+from keras.engine.topology import InputLayer
+from keras import backend as K
 
 from data import numDetectionWindowsAlongAxis, squashCoords, MIN_FACE_SCALE, OFFSET, SCALES, CALIB_PATTERNS_ARR
 from util import static_vars
@@ -18,19 +14,18 @@ NET_FILE_NAMES = {False: {SCALES[0][0]: '12net.hdf', SCALES[1][0]: '24net.hdf', 
                   True: {SCALES[0][0]: '12calibnet.hdf', SCALES[1][0]: '24calibnet.hdf', SCALES[2][0]: '48calibnet.hdf'}}
 IOU_THRESH = .5
 PYRAMID_DOWNSCALE = 1.5
-NET_12_THRESH = .01
-NET_24_THRESH = .03
-NET_48_THRESH = .1
+NET_12_THRESH = .5
+NET_24_THRESH = .5
+NET_48_THRESH = .5
 
 def to_tf_model(func):
-    from train import INPUT_LAYER_NAME_ID
-
     def decorate(*args, **kwargs):
         inputLayers = []
         ret = func(*args, **kwargs)
 
         for layer in ret.layers:
-            if layer.name.startswith(INPUT_LAYER_NAME_ID):
+            if type(layer) is InputLayer:
+                print(layer)
                 inputLayers.append(layer.input)
 
         inputLayers.append(K.learning_phase())
@@ -40,29 +35,8 @@ def to_tf_model(func):
     return decorate
 
 @to_tf_model
-def load_12net():
-    return load_model(NET_FILE_NAMES[False].get(SCALES[0][0]))
-
-@to_tf_model
-def load_12netcalib():
-    return load_model(NET_FILE_NAMES[True].get(SCALES[0][0]))
-
-@to_tf_model
-def load_24net():
-    return load_model(NET_FILE_NAMES[False].get(SCALES[1][0]))
-
-@to_tf_model
-def load_24netcalib():
-    return load_model(NET_FILE_NAMES[True].get(SCALES[1][0]))
-
-@to_tf_model
-def load_48net():
-    return load_model(NET_FILE_NAMES[False].get(SCALES[2][0]))
-
-@to_tf_model
-def load_48netcalib():
-    return load_model(NET_FILE_NAMES[True].get(SCALES[2][0]))
-
+def load_net(stageIdx, isCalib):
+    return load_model(getModelFileName(stageIdx, isCalib))
 
 def IoU(boxes, box, area=None):
     int_x1, int_y1, int_x2, int_y2 = ((np.maximum if i < 2 else np.minimum)(boxes[:, i], box[i]) for i in np.arange(boxes.shape[1]))
@@ -139,16 +113,29 @@ def getNetworkInputs(img, curScale, coords):
 
     return inputs
 
+def getImagePreprocessors(stageIdx):
+    from model import getBestSavedModelParams, getModelInstance
+    from hyperopt_keras import parseParams
+    from dataset import ObjectDataset
+    paramSpaces = [getModelInstance(stageIdx, isCalib).PARAM_SPACE for isCalib in (False, True)]
+    classifierParams, calibratorParams = (getBestSavedModelParams(paramSpaces[i], stageIdx, isCalib) for i, isCalib in enumerate([False, True]))
+    classifierNormParams, calibratorNormParams = (parseParams(params)[0] for params in [classifierParams, calibratorParams])
+    return ObjectDataset(stageIdx, False, **classifierNormParams), ObjectDataset(stageIdx, True, **calibratorNormParams)
+
 _createModelDict = lambda: {SCALES[i][0]:None for i in range(len(SCALES))}
-@static_vars(classifiers=_createModelDict(), calibrators=_createModelDict())
+@static_vars(classifiers=_createModelDict(), calibrators=_createModelDict(), preprocessors={})
 def detectMultiscale(img, maxStageIdx=len(SCALES)-1, minFaceScale = MIN_FACE_SCALE):
-    from train import preprocessImages
     from FaceDetection import PROFILE
+
     curScale = SCALES[0][0]
+    preprocessImages = lambda stageIdx, isCalib, images: detectMultiscale.preprocessors['calibrators' if isCalib else 'classifiers'][stageIdx].preprocessImages(images)
 
     if detectMultiscale.classifiers.get(curScale) is None:
-        detectMultiscale.classifiers[curScale] = load_12net()
-        detectMultiscale.calibrators[curScale] = load_12netcalib()
+        detectMultiscale.classifiers[curScale] = load_net(0, False)
+        detectMultiscale.calibrators[curScale] = load_net(0, True)
+        classifierPreprocesor, calibPreprocessor = getImagePreprocessors(0)
+        detectMultiscale.preprocessors['classifiers'] = [classifierPreprocesor]
+        detectMultiscale.preprocessors['calibrators'] = [calibPreprocessor] 
 
     detectionWindowGenerator = getDetectionWindows(img, curScale, PYRAMID_DOWNSCALE)
     totalNumDetectionWindows = next(detectionWindowGenerator)
@@ -167,14 +154,12 @@ def detectMultiscale(img, maxStageIdx=len(SCALES)-1, minFaceScale = MIN_FACE_SCA
             prevPyrLevel = pyrLevel
         
     coords *= minFaceScale/curScale
-    detectionWindows.shape
-    
-    detectionWindows = preprocessImages(detectionWindows.astype(np.float))
-    predictions = detectMultiscale.classifiers[curScale]([detectionWindows, 0])[0][:,1]
+
+    predictions = detectMultiscale.classifiers[curScale]([preprocessImages(0, False, detectionWindows), 0])[0][:,1]
     posDetectionIndices = np.where(predictions>=NET_12_THRESH)
 
     detectionWindows = detectionWindows[posDetectionIndices]
-    calibPredictions = detectMultiscale.calibrators[curScale]([detectionWindows, 0])[0]
+    calibPredictions = detectMultiscale.calibrators[curScale]([preprocessImages(0, True, detectionWindows), 0])[0]
     coords = calibrateCoordinates(coords[posDetectionIndices], calibPredictions)
     coords, picked, pyrIdxs = local_nms(coords, predictions[posDetectionIndices], pyrIdxs)
 

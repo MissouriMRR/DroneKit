@@ -1,4 +1,3 @@
-#!/usr/bin/env python3.5
 import random
 import os
 import math
@@ -20,7 +19,7 @@ TEST_IMAGES_FOLDER = 'Annotated Faces in the Wild/originalPics'
 
 DATASET_LABEL = 'data'
 LABELS_LABEL = 'labels'
-BATCH_SIZE = 128
+CHUNK_SIZE = 1024
 
 NEGATIVE_IMAGE_FOLDER = 'Negative Images/images/'
 NEGATIVE_DATABASE_PATHS = ('neg12.hdf', 'neg24.hdf', 'neg48.hdf')
@@ -32,7 +31,7 @@ OFFSET = 4
 SCALES = ((12,12),(24,24),(48,48))
 
 CALIBRATION_DATABASE_PATHS = {SCALES[0][0]:'calib12.hdf',SCALES[1][0]:'calib24.hdf',SCALES[2][0]:'calib48.hdf'}
-TARGET_NUM_CALIBRATION_SAMPLES = 225000
+TARGET_NUM_CALIBRATION_SAMPLES = 337500
 SN = (.83, .91, 1, 1.1, 1.21)
 XN = (-.17, 0, .17)
 YN = XN
@@ -91,11 +90,8 @@ def createFaceDataset(stageIdx, debug = DEBUG):
         images[i] = cv2.resize(curImg[y:y+h,x:x+w], resizeTo)
         prevImgPath = imgPath
 
-        if debug:
-            debug_showImage(images[i])
-
     with h5py.File(fileName, 'w') as out:
-        out.create_dataset(DATASET_LABEL, data = images, chunks = (BATCH_SIZE, *images.shape[1:]))
+        out.create_dataset(DATASET_LABEL, data = images, chunks = (CHUNK_SIZE, *images.shape[1:]))
 
 def createNegativeDataset(stageIdx, negImgFolder = NEGATIVE_IMAGE_FOLDER, numNegatives = TARGET_NUM_NEGATIVES, numNegativesPerImg = TARGET_NUM_NEGATIVES_PER_IMG, debug = DEBUG):
     fileName = NEGATIVE_DATABASE_PATHS[stageIdx]
@@ -121,9 +117,6 @@ def createNegativeDataset(stageIdx, negImgFolder = NEGATIVE_IMAGE_FOLDER, numNeg
                     negIdx += 1
                     numNegativesRetrievedFromImg += 1
 
-                    if debug:
-                        debug_showImage(images[negIdx-1])
-
         numNegativesRetrievedFromImg = 0
 
     if negIdx < len(images)-1:
@@ -131,7 +124,7 @@ def createNegativeDataset(stageIdx, negImgFolder = NEGATIVE_IMAGE_FOLDER, numNeg
         if debug: print(images.shape)
 
     with h5py.File(fileName, 'w') as out:
-        out.create_dataset(DATASET_LABEL, data = images, chunks = (BATCH_SIZE, *images.shape[1:]))
+        out.create_dataset(DATASET_LABEL, data = images, chunks = (CHUNK_SIZE, *images.shape[1:]))
 
 def mineNegatives(stageIdx, negImgFolder = NEGATIVE_IMAGE_FOLDER, numNegatives = TARGET_NUM_NEGATIVES, debug = DEBUG):
     from detect import detectMultiscale
@@ -160,9 +153,9 @@ def mineNegatives(stageIdx, negImgFolder = NEGATIVE_IMAGE_FOLDER, numNegatives =
         if debug: print(images.shape)
 
     with h5py.File(fileName, 'w') as out:
-        out.create_dataset(DATASET_LABEL, data = images, chunks = (BATCH_SIZE, *images.shape[1:]))
+        out.create_dataset(DATASET_LABEL, data = images, chunks = (CHUNK_SIZE, *images.shape[1:]))
 
-def createCalibrationDataset(stageIdx, numCalibrationSamples = TARGET_NUM_CALIBRATION_SAMPLES if not DEBUG else BATCH_SIZE*2, calibPatterns = CALIB_PATTERNS, debug = DEBUG):
+def createCalibrationDataset(stageIdx, numCalibrationSamples = TARGET_NUM_CALIBRATION_SAMPLES if not DEBUG else CHUNK_SIZE*2, calibPatterns = CALIB_PATTERNS, debug = DEBUG):
     numCalibrationSamples = math.inf if numCalibrationSamples is None else numCalibrationSamples
     faceAnnotations = getFaceAnnotations()
 
@@ -190,7 +183,6 @@ def createCalibrationDataset(stageIdx, numCalibrationSamples = TARGET_NUM_CALIBR
             if box[2] > 0 and box[3] > 0:
                 (box_x, box_y, box_w, box_h) = box
                 dataset[sampleIdx] = cv2.resize(curImg[box_y:box_y+box_h,box_x:box_x+box_w], resizeTo)
-                if debug: debug_showImage(dataset[sampleIdx])
                 labels[sampleIdx] = n 
                 sampleIdx += 1
 
@@ -201,8 +193,8 @@ def createCalibrationDataset(stageIdx, numCalibrationSamples = TARGET_NUM_CALIBR
     if debug: print(dataset.shape, labels.shape)
 
     with h5py.File(fileName, 'w') as out:
-        out.create_dataset(LABELS_LABEL, data = labels, chunks = (BATCH_SIZE, 1))
-        out.create_dataset(DATASET_LABEL, data = dataset, chunks = (BATCH_SIZE, resizeTo[1], resizeTo[0], 3))
+        out.create_dataset(LABELS_LABEL, data = labels, chunks = (CHUNK_SIZE, 1))
+        out.create_dataset(DATASET_LABEL, data = dataset, chunks = (CHUNK_SIZE, resizeTo[1], resizeTo[0], 3))
 
 def getTestImagePaths(testImgDbFolder = TEST_IMAGE_DATABASE_FOLDER, testImgsFolder = TEST_IMAGES_FOLDER):
     imgPaths = []

@@ -1,19 +1,20 @@
-#!/usr/bin/env python3.5
 from timeit import default_timer as timer
 
 WINDOW_TITLE = 'Face Detector Test'
 TEST = False
 
-TRAIN = False
-TRAIN_CALIB = False
+TRAIN = True
+TRAIN_CALIB = True
 
 LIVE_WINDOW_TITLE = 'RealSense Test'
-LIVE = True
+LIVE = False
 
-PROFILE = False
+EVAL = False
+
+PROFILE = True
 DEBUG = False
 
-STAGE_IDX = 2
+STAGE_IDX = 0
 
 GREEN = (0, 255, 0)
 THICKNESS = 3
@@ -26,7 +27,7 @@ if __name__ == '__main__':
 
     def predictionCallback(img):
         start = timer()
-        detections = detectMultiscale(img)
+        detections = detectMultiscale(img, STAGE_IDX)
 
         if PROFILE:
             print('Prediction took %fs' % (timer() - start,))
@@ -46,3 +47,5 @@ if __name__ == '__main__':
         with cv2Window(LIVE_WINDOW_TITLE) as win, Streamer() as stream:
             liveStream = LiveDisplay(stream, win)
             liveStream.run(predictionCallback)
+    elif EVAL:
+        print('Confusion matrix:\n', confusionMatrix(STAGE_IDX, TRAIN_CALIB))
