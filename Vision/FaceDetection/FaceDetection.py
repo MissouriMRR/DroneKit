@@ -1,10 +1,10 @@
 from timeit import default_timer as timer
 
 WINDOW_TITLE = 'Face Detector Test'
-TEST = False
+TEST = True
 
-TRAIN = True
-TRAIN_CALIB = True
+TRAIN = False
+TRAIN_CALIB = False
 
 LIVE_WINDOW_TITLE = 'RealSense Test'
 LIVE = False
@@ -14,7 +14,7 @@ EVAL = False
 PROFILE = True
 DEBUG = False
 
-STAGE_IDX = 0
+STAGE_IDX = 1
 
 GREEN = (0, 255, 0)
 THICKNESS = 3
@@ -48,4 +48,5 @@ if __name__ == '__main__':
             liveStream = LiveDisplay(stream, win)
             liveStream.run(predictionCallback)
     elif EVAL:
-        print('Confusion matrix:\n', confusionMatrix(STAGE_IDX, TRAIN_CALIB))
+        from eval import plot_precision_recall_vs_threshold
+        plot_precision_recall_vs_threshold(STAGE_IDX, TRAIN_CALIB)

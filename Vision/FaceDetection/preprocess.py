@@ -15,6 +15,7 @@ class ImageNormalizer():
     STANDARD_NORMALIZATION = 'std_norm'
     MIN_MAX_SCALING = 'min_max'
     ZCA_WHITENING = 'zca'
+    NORM_METHODS = (STANDARD_NORMALIZATION, MIN_MAX_SCALING, ZCA_WHITENING)
 
     FLIP_HORIZONTAL = 'fliph'
     FLIP_VERTICAL = 'flipv'
@@ -58,6 +59,9 @@ class ImageNormalizer():
       self.preprocessParams.update(params)
 
     def preprocess(self, images, labels = None, batchSize = None, shuffle = False, useDataAugmentation = True, seed = RANDOM_SEED):
+      if len(images) == 0:
+        return images
+
       if self.imagePreprocessor is None:
         self.imagePreprocessor = ImageDataGenerator(**self.preprocessParams)
         self.noAugmentationImagePreprocesor = ImageDataGenerator(**self.normalizationParams)

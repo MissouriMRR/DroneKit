@@ -11,14 +11,14 @@ from model import DEFAULT_NUM_EPOCHS
 def train(stageIdx, trainCalib, numEpochs = DEFAULT_NUM_EPOCHS, tune = True):
     from model import MODELS
     from data import FACE_DATABASE_PATHS, NEGATIVE_DATABASE_PATHS, CALIBRATION_DATABASE_PATHS, SCALES, DATASET_LABEL, LABELS_LABEL, \
-                     createFaceDataset, createNegativeDataset, createCalibrationDataset
+                     createFaceDataset, createNegativeDataset, createCalibrationDataset, mineNegatives
 
     model = MODELS[trainCalib][stageIdx]
     posDatasetFilePath = FACE_DATABASE_PATHS[stageIdx]
     negDatasetFilePath = NEGATIVE_DATABASE_PATHS[stageIdx]
     calibDatasetFilePath = CALIBRATION_DATABASE_PATHS[SCALES[stageIdx][0]]
     datasetCreationMethod = {posDatasetFilePath: createFaceDataset, 
-                             negDatasetFilePath: createNegativeDataset, 
+                             negDatasetFilePath: createNegativeDataset if stageIdx == 0 else mineNegatives, 
                              calibDatasetFilePath: createCalibrationDataset}
     labels = None
     paths = [posDatasetFilePath, negDatasetFilePath]
