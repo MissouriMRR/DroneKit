@@ -24,8 +24,8 @@ The AI output is in the form of chaning the XSpeed, YSpeed and ZSpeed member var
 
 import pygame, sys, math, random, time
 
-RUN_SPEED = 20 # times.  Note: limited by hardware
-FRAMES_TO_SKIP = 0 # the number of roomba frames that pass for every time the simulation is drawn
+RUN_SPEED = 100 # times.  Note: limited by hardware
+FRAMES_TO_SKIP = 10 # the number of roomba frames that pass for every time the simulation is drawn
 
 # choose which AI runs, there are 2 of them
 AI = "Sim9AI"
@@ -35,9 +35,9 @@ AI = "Sim9AI"
 #these weights are applied after robots that are too close to obstacle robots have been eliminated and robots that are already pointing in a good direction have been eliminated
 OB_WEIGHT = 50
 OB_PROJECT_ROOMBA_FRAMES = 60 # 60f / 5fps * 0.33m/s == 4 meters
-CLOSENESS_WEIGHT = 100000
+CLOSENESS_WEIGHT = 50000
 CLOSENESS_WIDTH = 10 # pixels
-GREENLINE_WIEGHT = 0.1
+GREENLINE_WIEGHT = 0.4
 GOOD_DIRECTION_WIDTH = 100 # degrees; the range is half of this in each direction from the direction to the target point in the top of the window
 NO_TARGET_POINT = 12 # seconds; after this many seconds sim9AI no will longer leave its roomba
 
