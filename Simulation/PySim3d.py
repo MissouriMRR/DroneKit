@@ -13,8 +13,14 @@
 
 import pygame, sys, math, random, time
 
+RUN_SPEED = 20 # times.  Note: limited by hardware
+FRAMES_TO_SKIP = 0 # the number of roomba frames that pass for every time the simulation is drawn
 
-# AI weights, not on same scale
+# choose which AI runs, there are 2 of them
+AI = "Sim9AI"
+# AI = "Tracker"
+
+# Sim9AI weights, not on same scale
 #these weights are applied after robots that are too close to obstacle robots have been eliminated and robots that are already pointing in a good direction have been eliminated
 OB_WEIGHT = 50
 OB_PROJECT_ROOMBA_FRAMES = 60 # 60f / 5fps * 0.33m/s == 4 meters
@@ -23,10 +29,6 @@ CLOSENESS_WIDTH = 10 # pixels
 GREENLINE_WIEGHT = 0.1
 GOOD_DIRECTION_WIDTH = 100 # degrees; the range is half of this in each direction from the direction to the target point in the top of the window
 NO_TARGET_POINT = 12 # seconds; after this many seconds sim9AI no will longer leave its roomba
-OBSTACLE_CAMERA_ALERT_THRESHOLD = 1 # meter
-
-RUN_SPEED = 20 # times.  Note: limited by hardware
-FRAMES_TO_SKIP = 0 # the number of roomba frames that pass for every time the simulation is drawn
 
 TRACKER_OKAY_ROT_WIDTH = 90 # degrees, the angle width of acceptable direction for a roomba the drone is tracking.  This value is divided by two when it is used.
 MAX_NOISE = 20
@@ -44,13 +46,17 @@ OBSTACLE_ROBOT_COUNT = 4
 OBSTACLE_ROBOT_START_RADIUS = 5 # meters
 OBSTACLE_ROBOT_NOISE = 2 # maximum degrees per roomba frame.  In the videos the obstacle robots get way off their circle, so this simulation has noise in the obstacle robots.
 OBSTACLE_ROBOT_BUMP_FACTOR = 0.1 # to prevent obstacle robots from getting stuck
+OBSTACLE_CAMERA_ALERT_THRESHOLD = 1 # meter
 DRONE_FRAME_RATE = 60 # frames per second
 DRONE_PIXEL_SPEED = 2 # the drone's agility, treated as a safety factor for slowing down to hit targets in Sim9AI()
 DRONE_ACCEL_NUMBER = 0.005 # I have no idea what unit this is.  This is from the JavaScript simulation.
 DRONE_OBSTACLE_DODGE_ACCEL = 0.001 # pixels per drone frame per drone frame
 DRONE_VERTICAL_ACCEL = 0.015 # pixels per drone frame per drone frame, it think; this is the drone's acceleration both up and down
 TAP_TARGET_Z = -5 # pixels
+HOVER_TARGET_Z = 0.25 * PIXELS_PER_METER # pixels
 BOUNCE_SPEED_RETENTION = 0.5 # the fraction of the velocity the drone hit the ground with that is put into the upward velocity the drone bounces up with
+DRONE_CAMERA_WIDTH_DEG = 40 # degrees
+DRONE_CAMERA_CIRCLE_DETECTION_RADIUS = 1 # meter
 DRONE_COUNT = 1
 DRONE_RADIUS = 0.18 # meters
 ROOMBA_HEIGHT = 0.1 # meters
@@ -60,10 +66,16 @@ OK_TO_LEAVE_THRESHOLD = 16 # of 24 meters
 DIRECTION_LINE_LENGTH = 15 # pixels
 PI = 3.14159265359 # don't change this value
 
-
+# Description:  rotate2d() returns the pos (x,y) rotated about (0,0) by rad radians.
 def rotate2d(pos,rad): x,y=pos; s,c = math.sin(rad),math.cos(rad); return x*c-y*s,y*c+x*s;
+
+# Description:  distance2d() returns the distance between points pos1 and pos2
 def distance2d(pos1,pos2): return math.sqrt( pow(pos1[0] - pos2[0], 2) + pow(pos1[1] - pos2[1], 2) )
+
+# Description:  inBounds returns whether or not the pos it is passed is in the 20x20 grid.
 def inBounds(pos): TWENTY_FOURTHS = METERS_PER_WINDOW * PIXELS_PER_METER / 24; return (pos[0] >= 2 * TWENTY_FOURTHS and pos[0] <= 22 * TWENTY_FOURTHS and pos[1] >= 2 * TWENTY_FOURTHS and pos[1] <= 22 * TWENTY_FOURTHS)
+
+# Description: mod() mods floating point numbers.
 def mod( n, d ):
   r = n
   if r > d:
@@ -97,36 +109,6 @@ def inPolygon(point,arrayOfVertices):
     index += 1
   return counter % 2 == 1
 
-
-class Cam:
-  def __init__(self,pos=(0,0,0),rot=(0,0)):
-    self.pos = list(pos)
-    self.rot = list(rot)
-
-  """
-  def events(self,event):
-    if event.type == pygame.MOUSEMOTION:
-      x,y = event.rel
-      x/=240; y/=240
-      self.rot[0]+=y; self.rot[1]+=x
-  """
-
-  def update(self,dt,key):
-    s = dt*10   
-
-    """
-    for i in range(len(key)):
-      if key[i]:
-        print(i)
-    """
-
-    if key[113]: self.pos[1]-=s # q
-    if key[101]: self.pos[1]+=s # e
-    
-    if key[119]: self.pos[2]+=s # w
-    if key[115]: self.pos[2]-=s # s
-    if key[97]: self.pos[0]-=s # a
-    if key[100]: self.pos[0]+=s # d
 
 
 class roomba:
@@ -248,17 +230,21 @@ class obstacleRobot(roomba):
 
 # for AI from JavaScript simulation
 class drone:
-  def __init__(self,X=(METERS_PER_WINDOW*PIXELS_PER_METER * 22/24),Y=(METERS_PER_WINDOW*PIXELS_PER_METER / 2),Z=(3 * PIXELS_PER_METER),XSpeed=(0),YSpeed=(0),ZSpeed=(0),targetZ=(3*PIXELS_PER_METER),TargetRobot=(0),OkToLeave=(True),NextRotate=(20 * DRONE_FRAME_RATE)):
+  def __init__(self,X=(METERS_PER_WINDOW*PIXELS_PER_METER * 22/24),Y=(METERS_PER_WINDOW*PIXELS_PER_METER / 2),Z=(3 * PIXELS_PER_METER),XSpeed=(0),YSpeed=(0),ZSpeed=(0),rotDeg=(0),targetZ=(3*PIXELS_PER_METER),TargetRobot=(0),OkToLeave=(True),NextRotate=(20 * DRONE_FRAME_RATE),TargetRobotLastRoombaFrameRotDeg=(-1),TargetRobotRotSampleCounter=(-1),TargetRobotTurning=(False)):
     self.X=X
     self.Y=Y
     self.Z=Z
     self.XSpeed=XSpeed
     self.YSpeed=YSpeed
     self.ZSpeed=ZSpeed
+    self.rotDeg=rotDeg
     self.targetZ=targetZ
     self.TargetRobot=TargetRobot
     self.OkToLeave=OkToLeave
     self.NextRotate=NextRotate
+    self.TargetRobotLastRoombaFrameRotDeg=TargetRobotLastRoombaFrameRotDeg
+    self.TargetRobotRotSampleCounter=TargetRobotRotSampleCounter
+    self.TargetRobotTurning=TargetRobotTurning
   
   
   def pos(self):
@@ -269,9 +255,10 @@ class drone:
 
   #self -> called object
   #groundRobotsPos    -> array of active ground robot's positions (x and y)
-  #groundRobotsRotDeg -> array of directions of ground robots
+  #groundRobotsRotDeg -> array of directions of ground robots (degrees)
   #obstacleRobotsPos  -> array of active obstacle robot's positions (x and y)
   #time               -> number of times to run (defaults to 1)
+  # Output is in the form of changing the speed member variables.  The other member variables are used by Sim9AI also.
   def Sim9AI( self, groundRobotsPos, groundRobotsRotDeg, obstacleRobotsPos, obstacleRobotsHeight = [], times = 1 ):
   
     #print( groundRobotsPos, groundRobotsRotDeg, groundRobotsStillIn, obstacleRobotsPos )
@@ -290,13 +277,14 @@ class drone:
         if self.TargetRobot >= len( groundRobotsPos ):
           self.OkToLeave = True
           self.TargetRobot = -1
+          self.TargetRobotLastRoombaFrameRotDeg = -1
       
       
         obstacleDodge = -1
         for obsIndex in range(len(obstacleRobotsPos)):
           if obstacleRobotsHeight[obsIndex] >= self.Z and distance2d( (self.X,self.Y), obstacleRobotsPos[obsIndex] ) < PIXELS_PER_METER * OBSTACLE_CAMERA_ALERT_THRESHOLD:
             obstacleDodge = obsIndex
-        
+      
         if( obstacleDodge >= 0 ):
           self.OkToLeave = True
           self.TargetRobot = -1
@@ -323,7 +311,7 @@ class drone:
             #print( index2, groundRobotsPos[index2][0], groundRobotsPos[index2][1], TargetRot )
             
             if (Rot < TargetRot - GOOD_DIRECTION_WIDTH / 2 or Rot > TargetRot + GOOD_DIRECTION_WIDTH / 2):
-              # priority #1, is the target roomba safely far from
+              # priority #1, is the target roomba safely far from obstacle robots
               SafeTarget = True;
               for index3 in range( OBSTACLE_ROBOT_COUNT ):
                 A = groundRobotsPos[index2][0] - obstacleRobotsPos[index3][0]
@@ -357,7 +345,13 @@ class drone:
                   TempX = groundRobotsPos[index2][0]
                   TempY = groundRobotsPos[index2][1]
                   TempScore = scores[index2]
-      
+    
+          if( self.TargetRobot != PrevTargetRobot ):
+            #sys.stdout.write("target robot:" + str(self.TargetRobot) + ",PrevTargetRobot:" + str(PrevTargetRobot) + " ")
+            #sys.stdout.flush()
+            self.TargetRobotLastRoombaFrameRotDeg = -1
+            self.TargetRobotRotSampleCounter = -1
+            self.TargetRobotTurning = False
         else:
           self.targetZ = 3 * PIXELS_PER_METER
       
@@ -414,7 +408,10 @@ class drone:
           TargetRot = 180 + (180 / PI) * math.atan2( groundRobotsPos[self.TargetRobot][1] - (METERS_PER_WINDOW * PIXELS_PER_METER * 0), groundRobotsPos[self.TargetRobot][0] - (METERS_PER_WINDOW * PIXELS_PER_METER / 2) )
           if ( TargetRobotRot > TargetRot + (GOOD_DIRECTION_WIDTH / 2) or TargetRobotRot < TargetRot - (GOOD_DIRECTION_WIDTH / 2) ):
             if math.pow( ROOMBA_RADIUS * PIXELS_PER_METER, 2) > math.pow( self.X - groundRobotsPos[self.TargetRobot][0], 2) + math.pow( self.Y - groundRobotsPos[self.TargetRobot][1], 2):
-              self.targetZ = TAP_TARGET_Z
+              if self.TargetRobotTurning:
+                self.targetZ = HOVER_TARGET_Z
+              else:
+                self.targetZ = TAP_TARGET_Z
               
               if groundRobotsPos[self.TargetRobot][1] > METERS_PER_WINDOW * PIXELS_PER_METER * OK_TO_LEAVE_THRESHOLD / 24:
                 self.OkToLeave = False
@@ -423,13 +420,29 @@ class drone:
             else:
               self.targetZ = PIXELS_PER_METER * ( 3 - (3 / ( 1 + ( distance2d( ( groundRobotsPos[self.TargetRobot][0], groundRobotsPos[self.TargetRobot][1] ), ( self.X, self.Y ) ) / PIXELS_PER_METER ) ) ) )
           else:
-            self.targetZ = 3 * PIXELS_PER_METER
+            self.targetZ = HOVER_TARGET_Z
         else: # targetRobot < 0
           self.targetZ = 3 * PIXELS_PER_METER
         if ( self.Z < (self.targetZ) - (self.ZSpeed/DRONE_VERTICAL_ACCEL) ):
           self.ZSpeed += DRONE_VERTICAL_ACCEL
         if ( self.Z > (self.targetZ) - (self.ZSpeed/DRONE_VERTICAL_ACCEL) ):
           self.ZSpeed -= DRONE_VERTICAL_ACCEL
+        
+        if self.TargetRobot >= 0 and self.TargetRobot < len(groundRobotsPos):
+          if self.TargetRobotRotSampleCounter < 0:
+            if self.TargetRobotLastRoombaFrameRotDeg >= 0:
+              roombaTurningThreshold = (360 * ROOMBA_TURN_SPEED * ROOMBA_FRAME_DELAY / 1000) / 2 # degrees per roomba frame
+              self.TargetRobotTurning = roombaTurningThreshold < abs( mod(self.TargetRobotLastRoombaFrameRotDeg, 360) - mod(groundRobotsRotDeg[self.TargetRobot], 360) ) or roombaTurningThreshold < abs( mod(self.TargetRobotLastRoombaFrameRotDeg + 180, 360) - mod(groundRobotsRotDeg[self.TargetRobot] + 180, 360) )
+            self.TargetRobotLastRoombaFrameRotDeg = mod( groundRobotsRotDeg[self.TargetRobot], 360 )
+            self.TargetRobotRotSampleCounter = DRONE_FRAME_RATE * ROOMBA_FRAME_DELAY / 1000
+          else:
+            self.TargetRobotRotSampleCounter -= 1
+        else:
+          self.TargetRobotLastRoombaFrameRotDeg = -1
+          self.TargetRobotRotSampleCounter = -1
+          self.TargetRobotTurning = False
+        #sys.stdout.write(str(self.TargetRobotTurning) + " " + str(self.TargetRobot) + "; ")
+        #sys.stdout.flush()
           
       except Exception as e:
         print( "Error: TargetRobot:" , self.TargetRobot, "Message:", str(e) )
@@ -452,8 +465,21 @@ class drone:
   def Tracker( self, groundRobotsPos, groundRobotsRotDeg, obstacleRobotsPos, obstacleRobotsHeight = [], times = 1 ):
     
     for k in range( times ):
-    
+      
       self.iterate()
+      
+      obstacleDodge = -1
+      for obsIndex in range(len(obstacleRobotsPos)):
+        if obstacleRobotsHeight[obsIndex] >= self.Z and distance2d( (self.X,self.Y), obstacleRobotsPos[obsIndex] ) < PIXELS_PER_METER * OBSTACLE_CAMERA_ALERT_THRESHOLD:
+          obstacleDodge = obsIndex
+      
+      if( obstacleDodge >= 0 ):
+        self.OkToLeave = True
+        self.TargetRobot = -1
+        dxSign = -1 if self.X - obstacleRobotsPos[obstacleDodge][0] < 0 else 1
+        dySign = -1 if self.Y - obstacleRobotsPos[obstacleDodge][1] < 0 else 1
+        self.YSpeed = self.YSpeed + ( dySign * math.sqrt(DRONE_OBSTACLE_DODGE_ACCEL/(math.pow((self.X - obstacleRobotsPos[obstacleDodge][0])/(self.Y - obstacleRobotsPos[obstacleDodge][1]), 2) + 1)))
+        self.XSpeed = self.XSpeed + ( dxSign * math.sqrt(DRONE_OBSTACLE_DODGE_ACCEL/(math.pow((self.Y - obstacleRobotsPos[obstacleDodge][1])/(self.X - obstacleRobotsPos[obstacleDodge][0]), 2) + 1)))
     
       closestDist = METERS_PER_WINDOW * PIXELS_PER_METER
       closestDistIndex = -1
@@ -525,15 +551,37 @@ class drone:
         TargetRobotRot = groundRobotsRotDeg[self.TargetRobot]
         TargetRobotRot = ( TargetRobotRot % 360 + 360) if ( TargetRobotRot % 360 < 0) else ( TargetRobotRot % 360)
         TargetRot = 180 + (180 / PI) * math.atan2( groundRobotsPos[self.TargetRobot][1] - (METERS_PER_WINDOW * PIXELS_PER_METER * 0), groundRobotsPos[self.TargetRobot][0] - (METERS_PER_WINDOW * PIXELS_PER_METER / 2) )
-        if ( ( TargetRobotRot > TargetRot + TRACKER_OKAY_ROT_WIDTH / 2 or TargetRobotRot < TargetRot - TRACKER_OKAY_ROT_WIDTH / 2 ) and math.pow( ROOMBA_RADIUS * PIXELS_PER_METER, 2) > math.pow( self.X - groundRobotsPos[self.TargetRobot][0], 2) + math.pow( self.Y - groundRobotsPos[self.TargetRobot][1], 2) ):
-          self.targetZ = TAP_TARGET_Z
-       
+        if math.pow( ROOMBA_RADIUS * PIXELS_PER_METER, 2) > math.pow( self.X - groundRobotsPos[self.TargetRobot][0], 2) + math.pow( self.Y - groundRobotsPos[self.TargetRobot][1], 2):
+          if TargetRobotRot > TargetRot + TRACKER_OKAY_ROT_WIDTH / 2 or TargetRobotRot < TargetRot - TRACKER_OKAY_ROT_WIDTH / 2:
+            if self.TargetRobotTurning:
+              self.targetZ = HOVER_TARGET_Z
+            else:
+              self.targetZ = TAP_TARGET_Z
+          else:
+            self.targetZ = HOVER_TARGET_Z
         else:
           self.targetZ = 3 * PIXELS_PER_METER
+      else:
+        self.targetZ = 3 * PIXELS_PER_METER
       if ( self.Z < (self.targetZ) - (self.ZSpeed/DRONE_VERTICAL_ACCEL) ):
         self.ZSpeed += DRONE_VERTICAL_ACCEL
       if ( self.Z > (self.targetZ) - (self.ZSpeed/DRONE_VERTICAL_ACCEL) ):
         self.ZSpeed -= DRONE_VERTICAL_ACCEL
+      
+      if self.TargetRobot >= 0 and self.TargetRobot < len(groundRobotsPos):
+        if self.TargetRobotRotSampleCounter < 0:
+          if self.TargetRobotLastRoombaFrameRotDeg >= 0:
+            roombaTurningThreshold = (360 * ROOMBA_TURN_SPEED * ROOMBA_FRAME_DELAY / 1000) / 2 # degrees per roomba frame
+            self.TargetRobotTurning = roombaTurningThreshold < abs( mod(self.TargetRobotLastRoombaFrameRotDeg, 360) - mod(groundRobotsRotDeg[self.TargetRobot], 360) ) or roombaTurningThreshold < abs( mod(self.TargetRobotLastRoombaFrameRotDeg + 180, 360) - mod(groundRobotsRotDeg[self.TargetRobot] + 180, 360) )
+          self.TargetRobotLastRoombaFrameRotDeg = mod( groundRobotsRotDeg[self.TargetRobot], 360 )
+          self.TargetRobotRotSampleCounter = DRONE_FRAME_RATE * ROOMBA_FRAME_DELAY / 1000
+        else:
+          self.TargetRobotRotSampleCounter -= 1
+      else:
+        self.TargetRobotLastRoombaFrameRotDeg = -1
+        self.TargetRobotRotSampleCounter = -1
+        self.TargetRobotTurning = False
+        
 
   def iterate( self, times = 1 ):
     
@@ -544,6 +592,11 @@ class drone:
     if self.Z < 0:
       self.ZSpeed = abs(self.ZSpeed) * BOUNCE_SPEED_RETENTION
       self.Z = 0
+    #if self.TargetRobot >= 0 and self.TargetRobot < len( groundBotsPos ):
+    #  if mod(math.atan2( self.Y - groundBotsPos[self.TargetRobot][1], self.X - groundBotsPos[self.TargetRobot][0] ) * 180 / PI - self.rotDeg + 180, 360 ) > 180:
+    #    self.rotDeg -= 1
+    #  else:
+    #    self.rotDeg -= 1
 
 
 
@@ -618,14 +671,17 @@ while seconds < 600 and not obstacleCollision:
     groundBotsPos, groundBotsRotDeg, obstacleBotsPos, obstacleBotsHeight = [], [], [], []
     for groundBot in groundRobots:
       if groundBot.stillIn:
+      #  if DRONE_CAMERA_WIDTH_DEG > abs( math.atan2( groundBot.pos[1] - drones[k].Y, groundBot.pos[0] - drones[k].X ) * 180 / PI - drones[k].rotDeg ) or distance2d((drones[k].X,drones[k].Y),groundBot.pos) < DRONE_CAMERA_CIRCLE_DETECTION_RADIUS * PIXELS_PER_METER:
         groundBotsPos.append( groundBot.pos ); groundBotsRotDeg.append( groundBot.rotDeg )
     for obstacleBot in obstacleRobots:
       obstacleBotsPos.append( obstacleBot.pos )
       obstacleBotsHeight.append( obstacleBot.height )
 
 
-
-    drones[k].Sim9AI( groundBotsPos, groundBotsRotDeg, obstacleBotsPos, obstacleBotsHeight, int( DRONE_FRAME_RATE * ROOMBA_FRAME_DELAY / 1000 + 0.5 ) )
+    if( AI == "Sim9AI" ):
+      drones[k].Sim9AI( groundBotsPos, groundBotsRotDeg, obstacleBotsPos, obstacleBotsHeight, int( DRONE_FRAME_RATE * ROOMBA_FRAME_DELAY / 1000 + 0.5 ) )
+    elif( AI == "Tracker" ):
+      drones[k].Tracker( groundBotsPos, groundBotsRotDeg, obstacleBotsPos, obstacleBotsHeight, int( DRONE_FRAME_RATE * ROOMBA_FRAME_DELAY / 1000 + 0.5 ) )
 
     for j in range( GROUND_ROBOT_COUNT ):
       if math.pow( ROOMBA_RADIUS * PIXELS_PER_METER, 2) > math.pow( drones[k].X - groundRobots[j].pos[0], 2) + math.pow( drones[k].Y - groundRobots[j].pos[1], 2) and drones[k].Z < ROOMBA_TAPPABLE_HEIGHT:
@@ -661,6 +717,8 @@ while seconds < 600 and not obstacleCollision:
     for k in range( DRONE_COUNT ):
       pygame.draw.circle(screen, (255,0,255), (int(drones[k].X + 0.5),int(drones[k].Y + 0.5)), int( DRONE_RADIUS * PIXELS_PER_METER + 0.5 ), 0)
       pygame.draw.circle(screen, (240,230,180), (int(drones[k].X + 0.5),int(drones[k].Y + 0.5 - drones[k].Z)), int( DRONE_RADIUS * PIXELS_PER_METER + 0.5 ), 0)
+      #pygame.draw.line(screen, (240,230,180), (int(drones[k].X),int(drones[k].Y)), (int(drones[k].X + (1234 * math.cos((drones[k].rotDeg + DRONE_CAMERA_WIDTH_DEG) * PI / 180))),int(drones[k].Y + (1234 * math.sin((drones[k].rotDeg + DRONE_CAMERA_WIDTH_DEG) * PI / 180)))), 1)
+      #pygame.draw.line(screen, (240,230,180), (int(drones[k].X),int(drones[k].Y)), (int(drones[k].X + (1234 * math.cos((drones[k].rotDeg - DRONE_CAMERA_WIDTH_DEG) * PI / 180))),int(drones[k].Y + (1234 * math.sin((drones[k].rotDeg - DRONE_CAMERA_WIDTH_DEG) * PI / 180)))), 1)
 
 
 
@@ -674,6 +732,7 @@ while seconds < 600 and not obstacleCollision:
     else: # obstacle collision
       label = myfont.render( "Obstacle Collision", 1, (255,255,0))
       screen.blit(label, (METERS_PER_WINDOW*PIXELS_PER_METER - 100, METERS_PER_WINDOW*PIXELS_PER_METER - 20))
+    
 
     pygame.display.flip()
 
