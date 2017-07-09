@@ -15,7 +15,7 @@ NET_FILE_NAMES = {False: {SCALES[0][0]: '12net.hdf', SCALES[1][0]: '24net.hdf', 
                   True: {SCALES[0][0]: '12calibnet.hdf', SCALES[1][0]: '24calibnet.hdf', SCALES[2][0]: '48calibnet.hdf'}}
 IOU_THRESH = .5
 NET_12_THRESH = .005
-NET_24_THRESH = .064
+NET_24_THRESH = .219
 NET_48_THRESH = .5
 
 def to_tf_model(func):
@@ -129,7 +129,7 @@ def detectMultiscale(img, maxStageIdx=len(SCALES)-1, minFaceScale = MIN_FACE_SCA
         return coords.astype(np.int32, copy=False)
 
     curScale = SCALES[1][0]
-    posDatasetPath, negDatasetPath = (FACE_DATABASE_PATHS[0], NEGATIVE_DATABASE_PATHS[0])
+    posDatasetPath, negDatasetPath = (FACE_DATABASE_PATHS[1], NEGATIVE_DATABASE_PATHS[1])
 
     if detectMultiscale.classifiers.get(curScale) is None:
         detectMultiscale.classifiers[curScale], detectMultiscale.calibrators[curScale] = (loadNet(1, isCalib) for isCalib in (False, True))

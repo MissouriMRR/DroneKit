@@ -3,7 +3,7 @@ from timeit import default_timer as timer
 WINDOW_TITLE = 'Face Detector Test'
 TEST = True
 
-TRAIN = False
+TRAIN = True
 TRAIN_CALIB = False
 
 LIVE_WINDOW_TITLE = 'RealSense Test'
@@ -12,7 +12,7 @@ LIVE = False
 EVAL = False
 
 PROFILE = True
-DEBUG = False
+DEBUG = True
 
 STAGE_IDX = 1
 

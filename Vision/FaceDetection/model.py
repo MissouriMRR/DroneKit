@@ -34,7 +34,7 @@ OPTIMIZER = SGD
 DEFAULT_BATCH_SIZE = 128
 PREDICTION_BATCH_SIZE = 4096
 DEFAULT_NUM_EPOCHS = 300
-DEFAULT_Q_SIZE = PREDICTION_BATCH_SIZE
+DEFAULT_Q_SIZE = 1024
 DEBUG_FILE_PATH = 'debug.hdf'
 PARAM_FILE_NAME_FORMAT_STR = '%sparams'
 
@@ -44,6 +44,15 @@ NUM_CLASSIFIER_CATEGORIES = 2
 NUM_CALIBRATOR_CATEGORIES = 45
 
 class ObjectClassifier(ABC):
+    PARAM_SPACE = {
+        'dropout0': hp.uniform(0, .5),
+        'dropout1': hp.uniform(0, .5),
+        'lr': hp.loguniform(1e-4, .1),
+        'batchSize': hp.choice(32, 64, 128, 256),
+        'norm':  hp.choice(ImageNormalizer.STANDARD_NORMALIZATION, ImageNormalizer.MIN_MAX_SCALING),
+        'flip': hp.choice(None, ImageNormalizer.FLIP_HORIZONTAL)
+    }
+
     DEFAULT_DROPOUT = .3
     LOSS = 'binary_crossentropy'
     METRICS = ['accuracy']
@@ -115,15 +124,17 @@ class ObjectClassifier(ABC):
         with open(paramFilePath, 'wb') as modelParamFile:
             pickle.dump(trials, modelParamFile)
 
-    def _secondaryInputGenerator(self, generators):
+    def _multiInputGenerator(self, generator):
+        from data import SCALES
+        
         while True:
-                X, y = generators[0].next()
-                X_extended = [generator.next()[0] for generator in generators[1:]]
-                X_extended.append(X)
+                X, y = generator.next()
+                X_extended = [cv2.resize(img, SCALES[self.stageIdx - i]) for i in np.arange(self.stageIdx, -1, -1) for img in X] 
+                X_extended.insert(0, X)
                 yield X_extended, y
 
-    def _getInputGenerator(self, generators):
-        return generators[0] if len(generators) == 1 else self._secondaryInputGenerator(generators)
+    def _getInputGenerator(self, generator):
+        return generator if self.stageIdx == 0 else self._multiInputGenerator(generator)
 
     def fit(self, X_train, X_test, y_train, y_test, normalizer, numEpochs = DEFAULT_NUM_EPOCHS, saveFilePath = None, batchSize = None, 
             compileParams = None, dropouts = None, verbose = True, debug = DEBUG):
@@ -145,20 +156,15 @@ class ObjectClassifier(ABC):
         model = self(**params)
         y_train, y_test = (np_utils.to_categorical(vec, int(np.amax(vec) + 1)) for vec in (y_train, y_test))
 
-        if type(X_train) is not tuple:
-            X_train = (X_train,)
-        if type(X_test) is not tuple:
-            X_test = (X_test,)
+        trainGenerator = normalizer.preprocess(X, labels = y_train, batchSize = batchSize, shuffle = True)
+        validationGenerator = normalizer.preprocess(X, labels = y_test, batchSize = batchSize, shuffle = True, useDataAugmentation = False)
 
-        trainGenerators = tuple((normalizer.preprocess(X, labels = y_train, batchSize = batchSize, shuffle = True) for X in X_train))
-        validationGenerators = tuple((normalizer.preprocess(X, labels = y_test, batchSize = batchSize, shuffle = True, useDataAugmentation = False) for X in X_test))
-
-        model.fit_generator(self._getInputGenerator(trainGenerators),
+        model.fit_generator(self._getInputGenerator(trainGenerator),
                             len(X_train[0])//batchSize,
                             epochs = numEpochs,
                             verbose = 2 if verbose else 0,
                             callbacks = callbacks,
-                            validation_data = self._getInputGenerator(validationGenerators),
+                            validation_data = self._getInputGenerator(validationGenerator),
                             validation_steps = len(X_test[0])//batchSize,
                             max_q_size = DEFAULT_Q_SIZE)
 
@@ -204,15 +210,6 @@ class ObjectCalibrator(ObjectClassifier, ABC):
 
 
 class StageOneClassifier(ObjectClassifier):
-    PARAM_SPACE = {
-        'dropout0': hp.uniform(0, .5),
-        'dropout1': hp.uniform(0, .5),
-        'lr': hp.loguniform(1e-4, .1),
-        'batchSize': hp.choice(32, 64, 128, 256),
-        'norm':  hp.choice(ImageNormalizer.STANDARD_NORMALIZATION, ImageNormalizer.MIN_MAX_SCALING),
-        'flip': hp.choice(None, ImageNormalizer.FLIP_HORIZONTAL)
-    }
-
     def __init__(self):
         self.stageIdx = 0
         super().__init__(self.stageIdx)
@@ -237,8 +234,6 @@ class StageOneClassifier(ObjectClassifier):
         return self.model
 
 class StageTwoClassifier(ObjectClassifier):
-    PARAM_SPACE = StageOneClassifier.PARAM_SPACE
-
     def __init__(self):
         self.stageIdx = 1
         super().__init__(self.stageIdx)
@@ -273,34 +268,7 @@ class StageTwoClassifier(ObjectClassifier):
 
         return self.model
 
-    def _passSecondaryInputs(self, X, callback, *args, **kwargs):
-        resizeTo = SCALES[self.stageIdx - 1]
-
-        with TempH5pyFile('a') as secondaryTrainInput, TempH5pyFile('a') as secondaryTestInput:
-            for i, file in enumerate((secondaryTrainInput, secondaryTestInput)):
-                if i < len(X) and type(X[i]) is not tuple:
-                    file.create_dataset(DATASET_LABEL, (len(X[i]), *resizeTo, 3), dtype = X[i].dtype)
-                    dataset = file[DATASET_LABEL]
-
-                    for j in np.arange(len(X[i])):
-                        dataset[j] = cv2.resize(X[i][j], resizeTo)
-
-                    X[i] = (X[i], dataset)
-
-            return callback(*X, *args, **kwargs)
-
-    def fit(self, X_train, X_test, *args, **kwargs):
-        self._passSecondaryInputs([X_train, X_test], super().fit, *args, **kwargs)
-
-    def eval(self, X_test, *args, **kwargs):
-        return self._passSecondaryInputs([X_test], super().eval, *args, **kwargs)
-
-    def predict(self, X, *args, **kwargs):
-        return self._passSecondaryInputs([X], super().predict, *args, **kwargs)
-
 class StageOneCalibrator(ObjectCalibrator):
-    PARAM_SPACE = StageOneClassifier.PARAM_SPACE
-
     def __init__(self):
         self.stageIdx = 0
         super().__init__(self.stageIdx)
@@ -321,8 +289,6 @@ class StageOneCalibrator(ObjectCalibrator):
         return self.model
 
 class StageTwoCalibrator(ObjectCalibrator):
-    PARAM_SPACE = StageOneClassifier.PARAM_SPACE
-
     def __init__(self):
         self.stageIdx = 1
         super().__init__(self.stageIdx)
