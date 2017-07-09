@@ -24,8 +24,8 @@ The AI output is in the form of chaning the XSpeed, YSpeed and ZSpeed member var
 
 import pygame, sys, math, random, time
 
-RUN_SPEED = 100 # times.  Note: limited by hardware
-FRAMES_TO_SKIP = 10 # the number of roomba frames that pass for every time the simulation is drawn
+RUN_SPEED = 20 # times.  Note: limited by hardware
+FRAMES_TO_SKIP = 0 # the number of roomba frames that pass for every time the simulation is drawn
 
 # choose which AI runs, there are 2 of them
 AI = "Sim9AI"
