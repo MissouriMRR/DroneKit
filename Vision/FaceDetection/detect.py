@@ -8,7 +8,6 @@ from keras.engine.topology import InputLayer
 from keras import backend as K
 
 from data import numDetectionWindowsAlongAxis, squashCoords, MIN_FACE_SCALE, OFFSET, SCALES, CALIB_PATTERNS_ARR
-from model import MODELS
 from util import static_vars
 
 NET_FILE_NAMES = {False: {SCALES[0][0]: '12net.hdf', SCALES[1][0]: '24net.hdf', SCALES[2][0]: '48net.hdf'}, 
@@ -91,6 +90,7 @@ def getNetworkInputs(img, curScale, coords):
 _createModelDict = lambda: {SCALES[i][0]:None for i in range(len(SCALES))}
 @static_vars(classifiers=_createModelDict(), calibrators=_createModelDict(), preprocessors={})
 def detectMultiscale(img, maxStageIdx=len(SCALES)-1, minFaceScale = MIN_FACE_SCALE):
+    from model import MODELS
     from FaceDetection import PROFILE
     from data import FACE_DATABASE_PATHS, NEGATIVE_DATABASE_PATHS
     from preprocess import ImageNormalizer

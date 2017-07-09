@@ -1,7 +1,7 @@
 from timeit import default_timer as timer
 
 WINDOW_TITLE = 'Face Detector Test'
-TEST = True
+TEST = False
 
 TRAIN = True
 TRAIN_CALIB = False

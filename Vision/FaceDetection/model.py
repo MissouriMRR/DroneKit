@@ -60,57 +60,76 @@ class ObjectClassifier(ABC):
     def __init__(self, stageIdx):
         self.imgSize = SCALES[stageIdx]
         self.inputShape = (self.imgSize[1], self.imgSize[0], 3)
-        self.defaultParams = {}
-        self.normalizationParams = None
-        self.compileParams = None
-        self.trainParams = None
-        self.dropouts = None
         self.trainedModel = None
+        self.bestParams = None
+
+        self.update()
 
     @abstractmethod
     def __call__(self):
         pass
-
-    def update(self):
-        if len(self.defaultParams) == 0:
-            if self.wasTuned():
-                with open(self.getParamFilePath(), 'rb') as paramFile:
-                    trials = pickle.load(paramFile)
-                    best = trials.best_trial['misc']['vals']
-
-                    for k, v in best.items():
-                        if type(v) is list:
-                            best[k] = v[0]
-
-                    self.defaultParams.update(getBestParams(self.getParamSpace(), best))
-                    self.normalizationParams, self.compileParams, self.trainParams, self.dropouts = parseParams(self.defaultParams)
-
-    def compile(self, params = {}, loss = LOSS, metrics = METRICS):
-        if len(params) == 0: params = self.defaultParams
-        self.model.compile(loss = loss, optimizer = OPTIMIZER(**params), metrics = metrics)
-
-    def getWeightsFilePath(self):
-        from detect import NET_FILE_NAMES
-        return NET_FILE_NAMES[isinstance(self, ObjectCalibrator)][SCALES[self.stageIdx][0]]
-
+    
     def getParamFilePath(self):
         return PARAM_FILE_NAME_FORMAT_STR % (os.path.splitext(self.getWeightsFilePath())[0],)
 
     def getParamSpace(self):
         return self.PARAM_SPACE
 
+    def getWeightsFilePath(self):
+        from detect import NET_FILE_NAMES
+        return NET_FILE_NAMES[isinstance(self, ObjectCalibrator)][SCALES[self.stageIdx][0]]
+
     def getNormalizationMethod(self):
-        self.update()
-        return self.normalizationParams['norm'] if self.normalizationParams.get('norm') is not None else ImageNormalizer.STANDARD_NORMALIZATION
+        return self.bestParams['norm'] if self.wasTuned() else ImageNormalizer.STANDARD_NORMALIZATION
 
     def getNormalizationParams(self):
-        self.update()
-        params = copy.deepcopy(self.normalizationParams)
-        del params['norm']
+        params = {}
+
+        if self.wasTuned():
+            params = {k: v for k, v in self.bestParams.items() if k in NORMALIZATION_PARAMS}
+            del params['norm']
+
         return params
+
+    def getDropouts(self):
+        dropouts = [self.DEFAULT_DROPOUT] * len([k for k in self.getParamSpace() if k.startswith(DROPOUT_PARAM_ID)])
+
+        if self.wasTuned():
+            dropouts = []
+            for k, v in self.bestParams.items():
+                if type(k) is str and k.startswith(DROPOUT_PARAM_ID):
+                    idx = int(k.replace(DROPOUT_PARAM_ID, ''))
+                    dropouts.insert(idx, v)
+                    
+        return dropouts
+
+    def getOptimizerParams(self):
+        return {k: v for k, v in self.bestParams.items() if k in OPTIMIZER_PARAMS} if self.wasTuned() else {}
+
+    def getBatchSize(self):
+        return DEFAULT_BATCH_SIZE if not self.wasTuned() else self.bestParams['batchSize']
+
+    def getSaveFilePath(self, debug = DEBUG):
+        return self.getWeightsFilePath() if not debug else DEBUG_FILE_PATH
 
     def wasTuned(self):
         return os.path.isfile(self.getParamFilePath())
+
+    def update(self):
+        if self.wasTuned():
+            with open(self.getParamFilePath(), 'rb') as paramFile:
+                trials = pickle.load(paramFile)
+                best = trials.best_trial['misc']['vals']
+
+                for k, v in best.items():
+                    if type(v) is list:
+                        best[k] = v[0]
+
+                self.bestParams = getBestParams(self.getParamSpace(), best)
+
+    def compile(self, params = {}, loss = LOSS, metrics = METRICS):
+        if len(params) == 0 and self.bestParams: params = self.bestParams
+        self.model.compile(loss = loss, optimizer = OPTIMIZER(**params), metrics = metrics)
 
     def tune(self, posDatasetFilePath, negDatasetFilePath, paths, labels, metric, verbose = True):
         paramSpace = self.getParamSpace()
@@ -126,11 +145,14 @@ class ObjectClassifier(ABC):
 
     def _multiInputGenerator(self, generator):
         from data import SCALES
-        
+
         while True:
                 X, y = generator.next()
-                X_extended = [cv2.resize(img, SCALES[self.stageIdx - i]) for i in np.arange(self.stageIdx, -1, -1) for img in X] 
-                X_extended.insert(0, X)
+                X_extended = []
+
+                for i in np.arange(0, self.stageIdx+1):
+                    X_extended.append(np.vstack([cv2.resize(img, SCALES[i])[np.newaxis] for img in X]))
+
                 yield X_extended, y
 
     def _getInputGenerator(self, generator):
@@ -138,34 +160,28 @@ class ObjectClassifier(ABC):
 
     def fit(self, X_train, X_test, y_train, y_test, normalizer, numEpochs = DEFAULT_NUM_EPOCHS, saveFilePath = None, batchSize = None, 
             compileParams = None, dropouts = None, verbose = True, debug = DEBUG):
-        self.update()
-        params = {'compileParams': compileParams if compileParams is not None else self.compileParams, 
-                  'dropouts': dropouts if dropouts is not None else self.dropouts}
         
-        for k, v in list(params.items()):
-            if v is None:
-                del params[k]
-
-        if saveFilePath is None:
-            saveFilePath = self.getWeightsFilePath() if not debug else DEBUG_FILE_PATH
-        if batchSize is None:
-            batchSize = self.defaultParams['batchSize'] if self.defaultParams.get('batchSize') is not None else DEFAULT_BATCH_SIZE
+        params = [compileParams or self.getOptimizerParams(), dropouts or self.getDropouts()]
+        saveFilePath = saveFilePath or self.getSaveFilePath()
+        batchSize = batchSize or self.getBatchSize()
 
         callbacks = [ModelCheckpoint(saveFilePath, monitor = 'val_loss', save_best_only = True, verbose = int(verbose))]
 
-        model = self(**params)
+        model = self(*params)
         y_train, y_test = (np_utils.to_categorical(vec, int(np.amax(vec) + 1)) for vec in (y_train, y_test))
 
-        trainGenerator = normalizer.preprocess(X, labels = y_train, batchSize = batchSize, shuffle = True)
-        validationGenerator = normalizer.preprocess(X, labels = y_test, batchSize = batchSize, shuffle = True, useDataAugmentation = False)
+        trainGenerator = normalizer.preprocess(X_train, labels = y_train, batchSize = batchSize, shuffle = True)
+        validationGenerator = normalizer.preprocess(X_test, labels = y_test, batchSize = batchSize, shuffle = True, useDataAugmentation = False)
+
+        if debug: print(params, saveFilePath, batchSize, X_train.shape, X_test.shape, y_train.shape, y_test.shape)
 
         model.fit_generator(self._getInputGenerator(trainGenerator),
-                            len(X_train[0])//batchSize,
+                            len(X_train)//batchSize,
                             epochs = numEpochs,
                             verbose = 2 if verbose else 0,
                             callbacks = callbacks,
                             validation_data = self._getInputGenerator(validationGenerator),
-                            validation_steps = len(X_test[0])//batchSize,
+                            validation_steps = len(X_test)//batchSize,
                             max_q_size = DEFAULT_Q_SIZE)
 
         del self.trainedModel
