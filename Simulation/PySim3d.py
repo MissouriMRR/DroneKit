@@ -11,6 +11,17 @@
 #   with the command "python [filename]"
 
 
+
+"""
+Sim9AI is derived from the JavaScript Simulation "Sim9.html".
+Tracker is designed to be more realistic, guiding ground robots across the green line one at a time.
+The AIs are passed an array of ground robot and an array of obstacle robots.
+The AIs use member variables on the drone object for internal storage and for output.
+The AI output is in the form of chaning the XSpeed, YSpeed and ZSpeed member variables
+(which should have been named XVelocity, YVelocity, and ZVelocity).
+"""
+
+
 import pygame, sys, math, random, time
 
 RUN_SPEED = 20 # times.  Note: limited by hardware
@@ -258,7 +269,7 @@ class drone:
   #groundRobotsRotDeg -> array of directions of ground robots (degrees)
   #obstacleRobotsPos  -> array of active obstacle robot's positions (x and y)
   #time               -> number of times to run (defaults to 1)
-  # Output is in the form of changing the speed member variables.  The other member variables are used by Sim9AI also.
+  # Output is in the form of changing the x, y, and z speed member variables.  The other member variables are used by Sim9AI also.
   def Sim9AI( self, groundRobotsPos, groundRobotsRotDeg, obstacleRobotsPos, obstacleRobotsHeight = [], times = 1 ):
   
     #print( groundRobotsPos, groundRobotsRotDeg, groundRobotsStillIn, obstacleRobotsPos )
@@ -641,6 +652,8 @@ frameSkip = 0
 
 obstacleCollision = False
 
+MYFONT = pygame.font.SysFont("monospace", 15)
+
 while seconds < 600 and not obstacleCollision:
   seconds += float(ROOMBA_FRAME_DELAY) / float(1000)
   
@@ -667,17 +680,22 @@ while seconds < 600 and not obstacleCollision:
     obstacleRobots[k].iterate()
 
 
-  for k in range( DRONE_COUNT ):
-    groundBotsPos, groundBotsRotDeg, obstacleBotsPos, obstacleBotsHeight = [], [], [], []
-    for groundBot in groundRobots:
-      if groundBot.stillIn:
+
+  groundBotsPos, groundBotsRotDeg, obstacleBotsPos, obstacleBotsHeight = [], [], [], []
+  groundBotCounter = 0
+  for groundBot in groundRobots:
+    if groundBot.stillIn:
       #  if DRONE_CAMERA_WIDTH_DEG > abs( math.atan2( groundBot.pos[1] - drones[k].Y, groundBot.pos[0] - drones[k].X ) * 180 / PI - drones[k].rotDeg ) or distance2d((drones[k].X,drones[k].Y),groundBot.pos) < DRONE_CAMERA_CIRCLE_DETECTION_RADIUS * PIXELS_PER_METER:
-        groundBotsPos.append( groundBot.pos ); groundBotsRotDeg.append( groundBot.rotDeg )
-    for obstacleBot in obstacleRobots:
-      obstacleBotsPos.append( obstacleBot.pos )
-      obstacleBotsHeight.append( obstacleBot.height )
+      groundBotsPos.append( groundBot.pos ); groundBotsRotDeg.append( groundBot.rotDeg )
+  for obstacleBot in obstacleRobots:
+    obstacleBotsPos.append( obstacleBot.pos )
+    obstacleBotsHeight.append( obstacleBot.height )
 
 
+
+  for k in range( DRONE_COUNT ):
+    
+    # THE CALL TO THE AI
     if( AI == "Sim9AI" ):
       drones[k].Sim9AI( groundBotsPos, groundBotsRotDeg, obstacleBotsPos, obstacleBotsHeight, int( DRONE_FRAME_RATE * ROOMBA_FRAME_DELAY / 1000 + 0.5 ) )
     elif( AI == "Tracker" ):
@@ -697,6 +715,7 @@ while seconds < 600 and not obstacleCollision:
   if frameSkip <= 0:
     screen.fill((0,0,0))
 
+
     pPm = PIXELS_PER_METER # pixels per meter
     for k in range(20):
       pygame.draw.line(screen,(255,255,255),(3*pPm+(pPm*k),2*pPm),(3*pPm+(pPm*k),22*pPm),1)
@@ -712,26 +731,36 @@ while seconds < 600 and not obstacleCollision:
       directionLineEndPoint[0] += groundRobots[k].pos[0]
       directionLineEndPoint[1] += groundRobots[k].pos[1]
       pygame.draw.line(screen,(255,255,255),(int(groundRobots[k].pos[0] + 0.5),int(groundRobots[k].pos[1] + 0.5)),(int(directionLineEndPoint[0] + 0.5),int(directionLineEndPoint[1] + 0.5)),1)
+
     for k in range(OBSTACLE_ROBOT_COUNT):
       pygame.draw.circle(screen, (255,255,0), (int(obstacleRobots[k].pos[0] + 0.5),int(obstacleRobots[k].pos[1] + 0.5)), int(ROOMBA_RADIUS * PIXELS_PER_METER + 0.5), 0)
     for k in range( DRONE_COUNT ):
       pygame.draw.circle(screen, (255,0,255), (int(drones[k].X + 0.5),int(drones[k].Y + 0.5)), int( DRONE_RADIUS * PIXELS_PER_METER + 0.5 ), 0)
       pygame.draw.circle(screen, (240,230,180), (int(drones[k].X + 0.5),int(drones[k].Y + 0.5 - drones[k].Z)), int( DRONE_RADIUS * PIXELS_PER_METER + 0.5 ), 0)
+      label = MYFONT.render( str(drones[k].TargetRobot), 1, (255,255,0))
+      screen.blit(label, (METERS_PER_WINDOW*PIXELS_PER_METER - 150 - (20 * k), METERS_PER_WINDOW*PIXELS_PER_METER - 20))
       #pygame.draw.line(screen, (240,230,180), (int(drones[k].X),int(drones[k].Y)), (int(drones[k].X + (1234 * math.cos((drones[k].rotDeg + DRONE_CAMERA_WIDTH_DEG) * PI / 180))),int(drones[k].Y + (1234 * math.sin((drones[k].rotDeg + DRONE_CAMERA_WIDTH_DEG) * PI / 180)))), 1)
       #pygame.draw.line(screen, (240,230,180), (int(drones[k].X),int(drones[k].Y)), (int(drones[k].X + (1234 * math.cos((drones[k].rotDeg - DRONE_CAMERA_WIDTH_DEG) * PI / 180))),int(drones[k].Y + (1234 * math.sin((drones[k].rotDeg - DRONE_CAMERA_WIDTH_DEG) * PI / 180)))), 1)
+    label = MYFONT.render( "TargetRobot:", 1, (255,255,0))
+    screen.blit(label, (METERS_PER_WINDOW*PIXELS_PER_METER - 200 - (20 * DRONE_COUNT), METERS_PER_WINDOW*PIXELS_PER_METER - 20))
+
+    for grpi in range(len(groundBotsPos)):
+      label = MYFONT.render( str(grpi), 1, (255,255,0))
+      screen.blit(label, (groundBotsPos[grpi][0], groundBotsPos[grpi][1] - 20))
+      groundBotCounter += 1
 
 
 
 
-
-
-    myfont = pygame.font.SysFont("monospace", 15)
     if not obstacleCollision:
-      label = myfont.render( str(seconds), 1, (255,255,0))
-      screen.blit(label, (METERS_PER_WINDOW*PIXELS_PER_METER - 50, METERS_PER_WINDOW*PIXELS_PER_METER - 20))
+      label = MYFONT.render( "Seconds:", 1, (255,255,0))
+      screen.blit(label, (METERS_PER_WINDOW*PIXELS_PER_METER - 90, METERS_PER_WINDOW*PIXELS_PER_METER - 20))
+      label = MYFONT.render( str(seconds), 1, (255,255,0))
+      screen.blit(label, (METERS_PER_WINDOW*PIXELS_PER_METER - 40, METERS_PER_WINDOW*PIXELS_PER_METER - 20))
     else: # obstacle collision
-      label = myfont.render( "Obstacle Collision", 1, (255,255,0))
+      label = MYFONT.render( "Obstacle Collision", 1, (255,255,0))
       screen.blit(label, (METERS_PER_WINDOW*PIXELS_PER_METER - 100, METERS_PER_WINDOW*PIXELS_PER_METER - 20))
+    
     
 
     pygame.display.flip()
