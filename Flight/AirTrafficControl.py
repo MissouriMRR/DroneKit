@@ -415,7 +415,7 @@ class Tower(object):
 
   def checkGimbal(self):
       degYaw = int(math.degrees(self.vehicle.attitude.yaw))
-      degPitch = int(math.degrees(self.vehicle.attitude.pitch))
+      degPitch = -int(math.degrees(self.vehicle.attitude.pitch))
       degRoll = int(math.degrees(self.vehicle.attitude.roll))
       print("\nYaw: {0}".format(degYaw))
       print("\nPitch: {0}".format(degPitch))
