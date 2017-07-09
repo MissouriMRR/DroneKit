@@ -12,7 +12,7 @@ LIVE = False
 EVAL = False
 
 PROFILE = True
-DEBUG = True
+DEBUG = False
 
 STAGE_IDX = 1
 

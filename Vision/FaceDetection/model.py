@@ -17,10 +17,10 @@ from keras.callbacks import ModelCheckpoint
 from keras import backend as K
 atexit.register(K.clear_session)
 
-from hyperopt_keras import HyperoptWrapper, getBestParams, parseParams, tune
+from hyperopt_keras import HyperoptWrapper, getBestParams, tune
 from FaceDetection import DEBUG
 from preprocess import ImageNormalizer
-from data import SCALES, DATASET_LABEL
+from data import SCALES, DATASET_LABEL, FACE_DATABASE_PATHS, NEGATIVE_DATABASE_PATHS
 from util import TempH5pyFile
 hp = HyperoptWrapper()
 
@@ -40,9 +40,6 @@ PARAM_FILE_NAME_FORMAT_STR = '%sparams'
 
 STAGE_ONE_NOT_TRAINED_ERROR = 'You must train the stage one models before moving onto stage two!'
 
-NUM_CLASSIFIER_CATEGORIES = 2
-NUM_CALIBRATOR_CATEGORIES = 45
-
 class ObjectClassifier(ABC):
     PARAM_SPACE = {
         'dropout0': hp.uniform(0, .5),
@@ -60,6 +57,7 @@ class ObjectClassifier(ABC):
     def __init__(self, stageIdx):
         self.imgSize = SCALES[stageIdx]
         self.inputShape = (self.imgSize[1], self.imgSize[0], 3)
+        self.additionalNormalizers = []
         self.trainedModel = None
         self.bestParams = None
 
@@ -143,20 +141,25 @@ class ObjectClassifier(ABC):
         with open(paramFilePath, 'wb') as modelParamFile:
             pickle.dump(trials, modelParamFile)
 
-    def _multiInputGenerator(self, generator):
-        from data import SCALES
+    def _multiInputGenerator(self, X, normalizers, normalizerParams):
+        generator = normalizers[0].preprocess(X, **normalizerParams)
+        normalizerParams.update({'batchSize': None, 'labels': None})
 
         while True:
-                X, y = generator.next()
+                X, y = next(generator)
                 X_extended = []
 
                 for i in np.arange(0, self.stageIdx+1):
-                    X_extended.append(np.vstack([cv2.resize(img, SCALES[i])[np.newaxis] for img in X]))
+                    if i == self.stageIdx:
+                        X_extended.append(X)
+                    else:
+                        X_extended.append(normalizers[self.stageIdx].preprocess(np.vstack([cv2.resize(img, SCALES[i])[np.newaxis] for img in X]), **normalizerParams))
 
                 yield X_extended, y
 
-    def _getInputGenerator(self, generator):
-        return generator if self.stageIdx == 0 else self._multiInputGenerator(generator)
+    def _getInputGenerator(self, X, y, normalizers, batchSize = DEFAULT_BATCH_SIZE, shuffle = True, useDataAugmentation = True):
+        normalizerParams = {'labels': y, 'batchSize': batchSize, 'shuffle': shuffle, 'useDataAugmentation': useDataAugmentation}
+        return normalizers[0].preprocess(X, **normalizerParams) if self.stageIdx == 0 else self._multiInputGenerator(X, normalizers, normalizerParams)
 
     def fit(self, X_train, X_test, y_train, y_test, normalizer, numEpochs = DEFAULT_NUM_EPOCHS, saveFilePath = None, batchSize = None, 
             compileParams = None, dropouts = None, verbose = True, debug = DEBUG):
@@ -170,17 +173,16 @@ class ObjectClassifier(ABC):
         model = self(*params)
         y_train, y_test = (np_utils.to_categorical(vec, int(np.amax(vec) + 1)) for vec in (y_train, y_test))
 
-        trainGenerator = normalizer.preprocess(X_train, labels = y_train, batchSize = batchSize, shuffle = True)
-        validationGenerator = normalizer.preprocess(X_test, labels = y_test, batchSize = batchSize, shuffle = True, useDataAugmentation = False)
+        normalizers = self.additionalNormalizers + [normalizer]
 
         if debug: print(params, saveFilePath, batchSize, X_train.shape, X_test.shape, y_train.shape, y_test.shape)
 
-        model.fit_generator(self._getInputGenerator(trainGenerator),
+        model.fit_generator(self._getInputGenerator(X_train, y_train, normalizers, batchSize = batchSize),
                             len(X_train)//batchSize,
                             epochs = numEpochs,
                             verbose = 2 if verbose else 0,
                             callbacks = callbacks,
-                            validation_data = self._getInputGenerator(validationGenerator),
+                            validation_data = self._getInputGenerator(X_test, y_test, normalizers, batchSize = batchSize, useDataAugmentation = False),
                             validation_steps = len(X_test)//batchSize,
                             max_q_size = DEFAULT_Q_SIZE)
 
@@ -194,20 +196,22 @@ class ObjectClassifier(ABC):
         if self.trainedModel is None:
             self.trainedModel = self.loadModel(weightsFilePath)
 
-        y = np.zeros((0, NUM_CALIBRATOR_CATEGORIES if isinstance(self, ObjectCalibrator) else NUM_CLASSIFIER_CATEGORIES))
-
-        if type(X) is not tuple:
-            X = (X,)
+        inputGenerator = self._getInputGenerator(X, None, self.additionalNormalizers + [normalizer], 
+                                                 batchSize = PREDICTION_BATCH_SIZE, shuffle = False, useDataAugmentation = False)
         
-        for i in np.arange(0, len(X[0]), PREDICTION_BATCH_SIZE):
+        for i in np.arange(0, len(X), PREDICTION_BATCH_SIZE):
             batches = []
 
-            for X_input in X:
-                batches.insert(0, normalizer.preprocess(X_input[i:min(len(X_input), i + PREDICTION_BATCH_SIZE)]))
+            for X_input in next(inputGenerator)[0]:
+                batches.insert(0, X_input[:min(PREDICTION_BATCH_SIZE, len(X) - i)])
 
-            predictions = self.trainedModel.predict(batches, batch_size = PREDICTION_BATCH_SIZE)
+            predictions = self.trainedModel.predict(batches[::-1], batch_size = PREDICTION_BATCH_SIZE)
+            
+            if i == 0: 
+                y = np.zeros((0, predictions.shape[1]))
+            
             y = np.vstack((y, predictions))
-
+        
         return y
 
     def eval(self, X_test, y_test, normalizer, metric, weightsFilePath = None, **metric_kwargs):
@@ -250,6 +254,15 @@ class StageOneClassifier(ObjectClassifier):
         return self.model
 
 class StageTwoClassifier(ObjectClassifier):
+    PARAM_SPACE = {
+        'dropout0': hp.uniform(0, .75),
+        'dropout1': hp.uniform(0, .75),
+        'lr': hp.loguniform(1e-4, .3),
+        'batchSize': hp.choice(32, 64, 128, 256),
+        'norm':  hp.choice(ImageNormalizer.STANDARD_NORMALIZATION),
+        'flip': hp.choice(ImageNormalizer.FLIP_HORIZONTAL)
+    }
+
     def __init__(self):
         self.stageIdx = 1
         super().__init__(self.stageIdx)
@@ -271,6 +284,9 @@ class StageTwoClassifier(ObjectClassifier):
         for i, layer in enumerate(stageOneModel.layers):
             layer.set_weights(trainedStageOne.layers[i].get_weights())
             layer.trainable = False
+
+        self.additionalNormalizers.append(ImageNormalizer(FACE_DATABASE_PATHS[self.stageIdx - 1], NEGATIVE_DATABASE_PATHS[self.stageIdx - 1], 
+                                                          stageOne.getNormalizationMethod()))
 
         mergedFullyConnectedLayer = concatenate([fullyConnectedLayer, stageOneModel.output])
         finalDropout = Dropout(dropouts[1])(mergedFullyConnectedLayer)
@@ -305,6 +321,15 @@ class StageOneCalibrator(ObjectCalibrator):
         return self.model
 
 class StageTwoCalibrator(ObjectCalibrator):
+    PARAM_SPACE = {
+        'dropout0': hp.uniform(0, .75),
+        'dropout1': hp.uniform(0, .75),
+        'lr': hp.loguniform(1e-4, .3),
+        'batchSize': hp.choice(32, 64, 128, 256),
+        'norm':  hp.choice(ImageNormalizer.STANDARD_NORMALIZATION),
+        'flip': hp.choice(None)
+    }
+
     def __init__(self):
         self.stageIdx = 1
         super().__init__(self.stageIdx)
