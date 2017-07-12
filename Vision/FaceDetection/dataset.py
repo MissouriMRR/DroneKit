@@ -1,3 +1,6 @@
+from __future__ import absolute_import, division, print_function, unicode_literals
+__metaclass__ = type
+
 import h5py
 import numpy as np
 import atexit
@@ -37,7 +40,7 @@ class ClassifierDataset():
             self.negatives = None
 
         self.trainingSet = TempH5pyFile('a').__enter__()
-        self.trainingSet.create_dataset(DATASET_LABEL, (datasetLen, *self.positives.shape[1:]), dtype = self.positives.dtype)
+        self.trainingSet.create_dataset(DATASET_LABEL, (datasetLen,) + (self.positives.shape[1:]), dtype = self.positives.dtype)
         self.trainingSet[DATASET_LABEL][:len(self.positives)] = self.positives
 
         if useNegatives:

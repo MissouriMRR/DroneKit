@@ -1,3 +1,5 @@
+from __future__ import absolute_import, division, print_function, unicode_literals
+
 import random
 import os
 import math
@@ -59,7 +61,7 @@ def getFaceAnnotations(dbPath = POSITIVE_IMAGE_DATABASE_FILE, posImgFolder = POS
                 imgPath = os.path.join(posImgFolder, str(row[0]))
 
                 if os.path.isfile(imgPath):
-                    getFaceAnnotations.faces.append((imgPath, *row[1:]))
+                    getFaceAnnotations.faces.append((imgPath) + (row[1:]))
 
     return getFaceAnnotations.faces
 
@@ -91,7 +93,7 @@ def createFaceDataset(stageIdx, debug = DEBUG):
         prevImgPath = imgPath
 
     with h5py.File(fileName, 'w') as out:
-        out.create_dataset(DATASET_LABEL, data = images, chunks = (CHUNK_SIZE, *images.shape[1:]))
+        out.create_dataset(DATASET_LABEL, data = images, chunks = (CHUNK_SIZE,) + (images.shape[1:]))
 
 def createNegativeDataset(stageIdx, negImgFolder = NEGATIVE_IMAGE_FOLDER, numNegatives = TARGET_NUM_NEGATIVES, numNegativesPerImg = TARGET_NUM_NEGATIVES_PER_IMG, debug = DEBUG):
     fileName = NEGATIVE_DATABASE_PATHS[stageIdx]
@@ -124,7 +126,7 @@ def createNegativeDataset(stageIdx, negImgFolder = NEGATIVE_IMAGE_FOLDER, numNeg
         if debug: print(images.shape)
 
     with h5py.File(fileName, 'w') as out:
-        out.create_dataset(DATASET_LABEL, data = images, chunks = (CHUNK_SIZE, *images.shape[1:]))
+        out.create_dataset(DATASET_LABEL, data = images, chunks = (CHUNK_SIZE,) + (images.shape[1:]))
 
 def mineNegatives(stageIdx, negImgFolder = NEGATIVE_IMAGE_FOLDER, numNegatives = TARGET_NUM_NEGATIVES, debug = DEBUG):
     from detect import detectMultiscale
@@ -153,7 +155,7 @@ def mineNegatives(stageIdx, negImgFolder = NEGATIVE_IMAGE_FOLDER, numNegatives =
         if debug: print(images.shape)
 
     with h5py.File(fileName, 'w') as out:
-        out.create_dataset(DATASET_LABEL, data = images, chunks = (CHUNK_SIZE, *images.shape[1:]))
+        out.create_dataset(DATASET_LABEL, data = images, chunks = (CHUNK_SIZE,) + (images.shape[1:]))
 
 def createCalibrationDataset(stageIdx, numCalibrationSamples = TARGET_NUM_CALIBRATION_SAMPLES, calibPatterns = CALIB_PATTERNS, debug = DEBUG):
     numCalibrationSamples = math.inf if numCalibrationSamples is None else numCalibrationSamples

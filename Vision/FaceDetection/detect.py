@@ -1,3 +1,5 @@
+from __future__ import absolute_import, division, print_function, unicode_literals
+
 import cv2
 import numpy as np
 
@@ -66,7 +68,7 @@ THRESHOLDS = (NET_12_THRESH, NET_24_THRESH, NET_48_THRESH)
 
 for stageIdx in np.arange(1):
     PATHS.append((FACE_DATABASE_PATHS[stageIdx], NEGATIVE_DATABASE_PATHS[stageIdx]))
-    NORMALIZERS.append(tuple((ImageNormalizer(*PATHS[stageIdx], MODELS[stageIdx][isCalib].getNormalizationMethod()) for isCalib in (0, 1))))
+    NORMALIZERS.append(tuple((ImageNormalizer(PATHS[stageIdx][0], PATHS[stageIdx][1], MODELS[stageIdx][isCalib].getNormalizationMethod()) for isCalib in (0, 1))))
 
 def detectMultiscale(img, maxStageIdx=len(SCALES)-1, minFaceScale = MIN_FACE_SCALE):
     for stageIdx in np.arange(0, maxStageIdx + 1):

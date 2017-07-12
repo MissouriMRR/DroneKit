@@ -1,3 +1,6 @@
+from __future__ import absolute_import, division, print_function, unicode_literals
+__metaclass__ = type
+
 import h5py
 import numpy as np
 
@@ -32,7 +35,7 @@ class ImageNormalizer():
       for filePath in (posDatasetFilePath, negDatasetFilePath):
         with h5py.File(filePath, 'r') as inFile:
           dataset = inFile[DATASET_LABEL]
-          if self.X is None: self.X = np.zeros((0, *dataset.shape[1:]), dtype = dataset[0].dtype)
+          if self.X is None: self.X = np.zeros((0,) + (dataset.shape[1:]), dtype = dataset[0].dtype)
           self.X = np.vstack((self.X, dataset[:min(sampleSize, len(dataset))]))
       
       if normMethod == ImageNormalizer.STANDARD_NORMALIZATION:

@@ -1,3 +1,6 @@
+from __future__ import absolute_import, division, print_function, unicode_literals
+__metaclass__ = type
+
 import sys
 import os
 import numpy as np
@@ -7,7 +10,7 @@ from hyperopt import hp, fmin, tpe, STATUS_OK, STATUS_FAIL, Trials, space_eval
 
 DEFAULT_NUM_FOLDS = 3
 DEFAULT_NUM_EPOCHS = 50
-DEFAULT_NUM_EVALS = 15
+DEFAULT_NUM_EVALS = 20
 
 WEIGHTS_FILE_NAME = 'tune.hdf'
 
@@ -57,7 +60,10 @@ def parseParams(params):
 	return normalizationParams, compileParams, trainParams, dropouts
 
 def optimize(func):
-	def decorate(paramSpace, *args, numEvals = DEFAULT_NUM_EVALS, **kwargs):
+	def decorate(paramSpace, *args, **kwargs):		
+		numEvals = kwargs.get('numEvals') or DEFAULT_NUM_EVALS
+		if 'numEvals' in kwargs.keys(): del kwargs['numEvals']
+
 		trials = Trials()
 		callback = lambda params: func(params, *args, **kwargs)
 		atexit.register(os.remove, WEIGHTS_FILE_NAME)
@@ -79,7 +85,7 @@ def tune(params, model, posDatasetFilePath, negDatasetFilePath, paths, labels, m
 	normMethod = normalizationParams['norm']
 	del normalizationParams['norm']
 
-	with ClassifierDataset(*paths, labels) as dataset:
+	with ClassifierDataset(paths[0], paths[1], labels) as dataset:
 		scores = []
 
 		normalizer = ImageNormalizer(posDatasetFilePath, negDatasetFilePath, normMethod)

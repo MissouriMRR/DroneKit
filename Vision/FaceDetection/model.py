@@ -1,3 +1,6 @@
+from __future__ import absolute_import, division, print_function, unicode_literals
+__metaclass__ = type
+
 import pickle
 import os
 import multiprocessing
@@ -6,7 +9,9 @@ import numpy as np
 import atexit
 import copy
 import time
-from abc import ABC, abstractmethod
+import six
+import abc
+from abc import abstractmethod
 
 import keras
 from keras.models import Sequential, Model, load_model
@@ -44,7 +49,8 @@ PARAM_FILE_NAME_FORMAT_STR = '%sparams'
 STAGE_ONE_NOT_TRAINED_ERROR = 'You must train the stage one models before moving onto stage two!'
 STAGE_TWO_NOT_TRAINED_ERROR = 'You must train the stage two models before moving onto stage three!'
 
-class ObjectClassifier(ABC):
+@six.add_metaclass(abc.ABCMeta)
+class ObjectClassifier():
     PARAM_SPACE = {
         'dropout0': hp.uniform(0, .75),
         'dropout1': hp.uniform(0, .75),
@@ -105,7 +111,7 @@ class ObjectClassifier(ABC):
         if self.wasTuned():
             dropouts = []
             for k, v in self.bestParams.items():
-                if type(k) is str and k.startswith(DROPOUT_PARAM_ID):
+                if k.startswith(DROPOUT_PARAM_ID):
                     idx = int(k.replace(DROPOUT_PARAM_ID, ''))
                     dropouts.insert(idx, v)
                     
@@ -149,7 +155,7 @@ class ObjectClassifier(ABC):
             print('Best model parameters found:', getBestParams(paramSpace, best))
 
         with open(paramFilePath, 'wb') as modelParamFile:
-            pickle.dump(trials, modelParamFile)
+            pickle.dump(trials, modelParamFile, protocol = 2)
 
         self.update()
 
@@ -195,7 +201,7 @@ class ObjectClassifier(ABC):
                             callbacks = callbacks,
                             validation_data = self.getInputGenerator(X_test, y_test, normalizers, batchSize = batchSize, useDataAugmentation = False, shuffle = False),
                             validation_steps = len(X_test)//batchSize,
-                            max_q_size = DEFAULT_Q_SIZE)
+                            max_queue_size = DEFAULT_Q_SIZE)
 
         del self.trainedModel
         self.trainedModel = None
@@ -212,11 +218,13 @@ class ObjectClassifier(ABC):
 
             inputLayers.append(K.learning_phase())
             self.predictFunc = K.function(inputLayers, [self.trainedModel.layers[-1].output])
+        
+        return self.trainedModel
 
     def predict(self, X, normalizer = None, weightsFilePath = None):
         self.loadModel(weightsFilePath)
         useFastPredict = normalizer is None
-        makePrediction = lambda X: self.predictFunc([*X, 0])[0]
+        makePrediction = lambda X: self.predictFunc(X[::-1])[0]
 
         if not useFastPredict:
             batchSize = PREDICTION_BATCH_SIZE
@@ -230,13 +238,15 @@ class ObjectClassifier(ABC):
                 for inputArray in X_batch:
                     batches.insert(0, inputArray[:min(PREDICTION_BATCH_SIZE, len(X) - i)])
                 
-                predictions = makePrediction(X_batch)
+                batches.insert(0, 0)
+                predictions = makePrediction(batches)
                 
                 if i == 0: 
                     y = np.zeros((0, predictions.shape[1]))
                 
                 y = np.vstack((y, predictions))
         else:
+            X.insert(0, 0)
             y = makePrediction(X)
         
         return y
@@ -245,7 +255,8 @@ class ObjectClassifier(ABC):
         y_pred = self.predict(X_test, normalizer, weightsFilePath)
         return metric(y_test, np.argmax(y_pred, axis = 1), **metric_kwargs)
 
-class ObjectCalibrator(ObjectClassifier, ABC):
+@six.add_metaclass(abc.ABCMeta)
+class ObjectCalibrator(ObjectClassifier):
     PARAM_SPACE = {
         'dropout0': hp.uniform(0, .75),
         'dropout1': hp.uniform(0, .75),
@@ -258,7 +269,7 @@ class ObjectCalibrator(ObjectClassifier, ABC):
     LOSS = 'categorical_crossentropy'
 
     def __init__(self, stageIdx):
-        super().__init__(stageIdx)
+        super(ObjectCalibrator, self).__init__(stageIdx)
 
     @abstractmethod
     def __call__(self):
@@ -268,7 +279,7 @@ class ObjectCalibrator(ObjectClassifier, ABC):
 class StageOneClassifier(ObjectClassifier):
     def __init__(self):
         self.stageIdx = 0
-        super().__init__(self.stageIdx)
+        super(StageOneClassifier, self).__init__(self.stageIdx)
 
     def __call__(self, compileParams = {}, dropouts = [ObjectClassifier.DEFAULT_DROPOUT]*2, includeTop = True, compile = True):
         inputLayer = Input(shape = self.inputShape)
@@ -292,7 +303,7 @@ class StageOneClassifier(ObjectClassifier):
 class StageTwoClassifier(ObjectClassifier):
     def __init__(self):
         self.stageIdx = 1
-        super().__init__(self.stageIdx)
+        super(StageTwoClassifier, self).__init__(self.stageIdx)
 
     def __call__(self, compileParams = {}, dropouts = [ObjectClassifier.DEFAULT_DROPOUT]*2, includeTop = True, compile = True):
         inputLayer = Input(shape = self.inputShape)
@@ -330,7 +341,7 @@ class StageTwoClassifier(ObjectClassifier):
 class StageThreeClassifier(ObjectClassifier):
     def __init__(self):
         self.stageIdx = 2
-        super().__init__(self.stageIdx)
+        super(StageThreeClassifier, self).__init__(self.stageIdx)
     
     def __call__(self, compileParams = {}, dropouts = [ObjectClassifier.DEFAULT_DROPOUT]*3):
         inputLayer = Input(shape = self.inputShape)
@@ -374,7 +385,7 @@ class StageThreeClassifier(ObjectClassifier):
 class StageOneCalibrator(ObjectCalibrator):
     def __init__(self):
         self.stageIdx = 0
-        super().__init__(self.stageIdx)
+        super(StageOneCalibrator, self).__init__(self.stageIdx)
 
     def __call__(self, compileParams = {}, dropouts = [ObjectCalibrator.DEFAULT_DROPOUT]*2):
         inputLayer = Input(shape = self.inputShape)
@@ -394,7 +405,7 @@ class StageOneCalibrator(ObjectCalibrator):
 class StageTwoCalibrator(ObjectCalibrator):
     def __init__(self):
         self.stageIdx = 1
-        super().__init__(self.stageIdx)
+        super(StageTwoCalibrator, self).__init__(self.stageIdx)
 
     def __call__(self, compileParams = {}, dropouts = [ObjectCalibrator.DEFAULT_DROPOUT]*2):
         inputLayer = Input(shape = self.inputShape)
@@ -414,7 +425,7 @@ class StageTwoCalibrator(ObjectCalibrator):
 class StageThreeCalibrator(ObjectCalibrator):
     def __init__(self):
         self.stageIdx = 2
-        super().__init__(self.stageIdx)
+        super(StageThreeCalibrator, self).__init__(self.stageIdx)
 
     def __call__(self, compileParams = {}, dropouts = [ObjectCalibrator.DEFAULT_DROPOUT]*3):
         inputLayer = Input(shape = self.inputShape)
@@ -441,7 +452,7 @@ MODELS = {False: [StageOneClassifier(), StageTwoClassifier(), StageThreeClassifi
 if __name__ == '__main__':
     from dataset import ClassifierDataset
     model = StageOneClassifier()
-    X_test_gen, y_test_gen = (np.zeros((0, *model.inputShape)), np.zeros((0, 1)))
+    X_test_gen, y_test_gen = (np.zeros((0) + (model.inputShape)), np.zeros((0, 1)))
     posDatasetFilePath, negDatasetFilePath = (FACE_DATABASE_PATHS[model.stageIdx], NEGATIVE_DATABASE_PATHS[model.stageIdx])
     
     yesNo = {True: 'yes', False: 'no'}

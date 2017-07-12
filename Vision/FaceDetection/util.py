@@ -1,3 +1,6 @@
+from __future__ import absolute_import, division, print_function, unicode_literals
+__metaclass__ = type
+
 import inspect 
 import h5py
 import tempfile
@@ -34,12 +37,12 @@ class TempH5pyFile(h5py.File):
 		return self.filePath
 
 	def __enter__(self):
-		super().__init__(self.filePath, *self.args, **self.kwargs)
+		super(TempH5pyFile, self).__init__(self.filePath, *self.args, **self.kwargs)
 		return self
 
 	def close(self):
 		try:
-			super().close()
+			super(TempH5pyFile, self).close()
 		finally: os.remove(self.filePath)
 
 	def __exit__(self, *args):

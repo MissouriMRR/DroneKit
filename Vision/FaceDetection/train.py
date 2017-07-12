@@ -1,3 +1,5 @@
+from __future__ import absolute_import, division, print_function, unicode_literals
+
 import pickle
 import h5py
 import os
@@ -35,7 +37,7 @@ def train(stageIdx, trainCalib, numEpochs = DEFAULT_NUM_EPOCHS, tune = True):
     if not model.wasTuned() and tune:
         model.tune(posDatasetFilePath, negDatasetFilePath, paths, labels, f1_score)
 
-    with ClassifierDataset(*paths, labels) as dataset:
+    with ClassifierDataset(paths[0], paths[1], labels) as dataset:
         X_train, X_test, y_train, y_test = dataset.getStratifiedTrainingSet()
         normalizer = ImageNormalizer(posDatasetFilePath, negDatasetFilePath, model.getNormalizationMethod())
         normalizer.addDataAugmentationParams(model.getNormalizationParams())

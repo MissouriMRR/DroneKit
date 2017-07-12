@@ -1,9 +1,11 @@
+from __future__ import absolute_import, division, print_function, unicode_literals
+
 from timeit import default_timer as timer
 
 WINDOW_TITLE = 'Face Detector Test'
-TEST = True
+TEST = False
 
-TRAIN = False
+TRAIN = True
 TRAIN_CALIB = False
 
 LIVE_WINDOW_TITLE = 'RealSense Test'
