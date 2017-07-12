@@ -1,9 +1,9 @@
 from timeit import default_timer as timer
 
 WINDOW_TITLE = 'Face Detector Test'
-TEST = False
+TEST = True
 
-TRAIN = True
+TRAIN = False
 TRAIN_CALIB = False
 
 LIVE_WINDOW_TITLE = 'RealSense Test'
@@ -14,7 +14,7 @@ EVAL = False
 PROFILE = True
 DEBUG = False
 
-STAGE_IDX = 1
+STAGE_IDX = 0
 
 GREEN = (0, 255, 0)
 THICKNESS = 3
@@ -34,7 +34,6 @@ if __name__ == '__main__':
         
         for (xMin, yMin, xMax, yMax) in detections: 
             cv2.rectangle(img, (xMin, yMin), (xMax, yMax), GREEN, THICKNESS)
-
 
     if TEST:
         visualizer(data.getTestImagePaths(), predictionCallback, WINDOW_TITLE)

@@ -62,7 +62,7 @@ class ClassifierDataset():
     def stratifiedSplitter(self, folds = DEFAULT_NUM_FOLDS, seed = RANDOM_SEED):
         self.assertUsingContextManager()
 
-        skfolds = StratifiedKFold(n_splits = DEFAULT_NUM_FOLDS, random_state = seed)
+        skfolds = StratifiedKFold(n_splits = folds, random_state = seed)
         X = self.trainingSet[DATASET_LABEL]
         y = np.vstack((np.ones((len(self.positives), 1)), np.zeros((len(self.negatives), 1)))) if self.labels is None else self.labels
 
@@ -72,5 +72,5 @@ class ClassifierDataset():
 
     def getStratifiedTrainingSet(self, percentTrain = DEFAULT_PERCENT_TRAIN, seed = RANDOM_SEED):
         numFolds = 1./(1-percentTrain)
-        X_train, X_test, y_train, y_test = next(self.stratifiedSplitter(numFolds, seed))
+        X_train, X_test, y_train, y_test = next(self.stratifiedSplitter(int(numFolds), seed))
         return X_train, X_test, y_train, y_test

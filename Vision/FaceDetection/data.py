@@ -19,7 +19,7 @@ TEST_IMAGES_FOLDER = 'Annotated Faces in the Wild/originalPics'
 
 DATASET_LABEL = 'data'
 LABELS_LABEL = 'labels'
-CHUNK_SIZE = 1024
+CHUNK_SIZE = 256
 
 NEGATIVE_IMAGE_FOLDER = 'Negative Images/images/'
 NEGATIVE_DATABASE_PATHS = ('neg12.hdf', 'neg24.hdf', 'neg48.hdf')
@@ -155,7 +155,7 @@ def mineNegatives(stageIdx, negImgFolder = NEGATIVE_IMAGE_FOLDER, numNegatives =
     with h5py.File(fileName, 'w') as out:
         out.create_dataset(DATASET_LABEL, data = images, chunks = (CHUNK_SIZE, *images.shape[1:]))
 
-def createCalibrationDataset(stageIdx, numCalibrationSamples = TARGET_NUM_CALIBRATION_SAMPLES if not DEBUG else CHUNK_SIZE*2, calibPatterns = CALIB_PATTERNS, debug = DEBUG):
+def createCalibrationDataset(stageIdx, numCalibrationSamples = TARGET_NUM_CALIBRATION_SAMPLES, calibPatterns = CALIB_PATTERNS, debug = DEBUG):
     numCalibrationSamples = math.inf if numCalibrationSamples is None else numCalibrationSamples
     faceAnnotations = getFaceAnnotations()
 

@@ -1,43 +1,15 @@
-import math
 import cv2
 import numpy as np
 
-import keras
-from keras.models import load_model
-from keras.engine.topology import InputLayer
-from keras import backend as K
+from model import MODELS
 
-from data import numDetectionWindowsAlongAxis, squashCoords, MIN_FACE_SCALE, OFFSET, SCALES, CALIB_PATTERNS_ARR
-from util import static_vars
+from data import numDetectionWindowsAlongAxis, squashCoords, MIN_FACE_SCALE, OFFSET, SCALES, CALIB_PATTERNS_ARR, FACE_DATABASE_PATHS, NEGATIVE_DATABASE_PATHS
+from preprocess import ImageNormalizer
 
-NET_FILE_NAMES = {False: {SCALES[0][0]: '12net.hdf', SCALES[1][0]: '24net.hdf', SCALES[2][0]: '48net.hdf'}, 
-                  True: {SCALES[0][0]: '12calibnet.hdf', SCALES[1][0]: '24calibnet.hdf', SCALES[2][0]: '48calibnet.hdf'}}
 IOU_THRESH = .5
-NET_12_THRESH = .005
-NET_24_THRESH = .219
+NET_12_THRESH = .003
+NET_24_THRESH = .5
 NET_48_THRESH = .5
-
-def to_tf_model(func):
-    def decorate(*args, **kwargs):
-        inputLayers = []
-        ret = func(*args, **kwargs)
-
-        for layer in ret.layers:
-            if type(layer) is InputLayer:
-                inputLayers.append(layer.input)
-
-        inputLayers.append(K.learning_phase())
-
-        return K.function(inputLayers, [ret.layers[-1].output])
-
-    return decorate
-
-@to_tf_model
-def loadNet(stageIdx, isCalib):
-    return MODELS[isCalib][stageIdx].loadModel()
-
-def getNormalizationMethod(stageIdx, isCalib):
-    return MODELS[isCalib][stageIdx].getNormalizationMethod()
 
 def IoU(boxes, box, area=None):
     int_x1, int_y1, int_x2, int_y2 = ((np.maximum if i < 2 else np.minimum)(boxes[:, i], box[i]) for i in np.arange(boxes.shape[1]))
@@ -87,80 +59,48 @@ def getNetworkInputs(img, curScale, coords):
 
     return inputs
 
-_createModelDict = lambda: {SCALES[i][0]:None for i in range(len(SCALES))}
-@static_vars(classifiers=_createModelDict(), calibrators=_createModelDict(), preprocessors={})
+MODELS = [(MODELS[False][stageIdx], MODELS[True][stageIdx]) for stageIdx in np.arange(len(SCALES))]
+PATHS = []
+NORMALIZERS = []
+THRESHOLDS = (NET_12_THRESH, NET_24_THRESH, NET_48_THRESH)
+
+for stageIdx in np.arange(1):
+    PATHS.append((FACE_DATABASE_PATHS[stageIdx], NEGATIVE_DATABASE_PATHS[stageIdx]))
+    NORMALIZERS.append(tuple((ImageNormalizer(*PATHS[stageIdx], MODELS[stageIdx][isCalib].getNormalizationMethod()) for isCalib in (0, 1))))
+
 def detectMultiscale(img, maxStageIdx=len(SCALES)-1, minFaceScale = MIN_FACE_SCALE):
-    from model import MODELS
-    from FaceDetection import PROFILE
-    from data import FACE_DATABASE_PATHS, NEGATIVE_DATABASE_PATHS
-    from preprocess import ImageNormalizer
+    for stageIdx in np.arange(0, maxStageIdx + 1):
+        curScale = SCALES[stageIdx][0]
+        classifierInputs = []
+        calibratorInputs = []
 
-    curScale = SCALES[0][0]
-    calibNormalizer = None
-    classifierNormalizer = None
-    posDatasetPath, negDatasetPath = (FACE_DATABASE_PATHS[0], NEGATIVE_DATABASE_PATHS[0])
+        if stageIdx == 0:
+            detectionWindowGenerator = getDetectionWindows(img, curScale)
+            totalNumDetectionWindows = next(detectionWindowGenerator)
+            detectionWindows = np.zeros((totalNumDetectionWindows, curScale, curScale, 3))
+            coords = np.zeros((totalNumDetectionWindows, 4))
 
-    if detectMultiscale.classifiers.get(curScale) is None:
-        detectMultiscale.classifiers[curScale], detectMultiscale.calibrators[curScale] = (loadNet(0, isCalib) for isCalib in (False, True))
-        detectMultiscale.preprocessors[curScale] = {norm: ImageNormalizer(posDatasetPath, negDatasetPath, norm) for norm in ImageNormalizer.NORM_METHODS}
+            for i, (xMin, yMin, xMax, yMax, detectionWindow) in enumerate(detectionWindowGenerator):
+                detectionWindows[i] = detectionWindow
+                coords[i] = (xMin, yMin, xMax, yMax)
 
-    calibNormalizer, classifierNormalizer = (detectMultiscale.preprocessors[curScale][getNormalizationMethod(0, isCalib)] for isCalib in (False, True))
+            coords *= minFaceScale/curScale
+        else:
+            for i in np.arange(0, stageIdx):
+                classifierInputs[i] = classifierInputs[i][posDetectionIndices][picked]
+
+        classifierNormalizer, calibNormalizer = NORMALIZERS[stageIdx]
+        classifier, calibrator = MODELS[stageIdx]
+
+        detectionWindows = detectionWindows if stageIdx == 0 else getNetworkInputs(img, curScale, coords).astype(np.float)
+        classifierInputs.append(classifierNormalizer.preprocess(detectionWindows))
+        predictions = classifier.predict(classifierInputs)[:,1]
+        posDetectionIndices = np.where(predictions>=THRESHOLDS[stageIdx])
+
+        calibratorInputs = [calibNormalizer.preprocess(detectionWindows[posDetectionIndices])]
+        calibPredictions = calibrator.predict(calibratorInputs)
+        coords = calibrateCoordinates(coords[posDetectionIndices], calibPredictions)
+        coords, picked = nms(coords, predictions[posDetectionIndices])
         
-    detectionWindowGenerator = getDetectionWindows(img, curScale)
-    totalNumDetectionWindows = next(detectionWindowGenerator)
-    detectionWindows = np.zeros((totalNumDetectionWindows, curScale, curScale, 3))
-    coords = np.zeros((totalNumDetectionWindows, 4))
-
-    for i, (xMin, yMin, xMax, yMax, detectionWindow) in enumerate(detectionWindowGenerator):
-        detectionWindows[i] = detectionWindow
-        coords[i] = (xMin, yMin, xMax, yMax)
-
-    coords *= minFaceScale/curScale
-
-    predictions = detectMultiscale.classifiers[curScale]([classifierNormalizer.preprocess(detectionWindows), 0])[0][:,1]
-    posDetectionIndices = np.where(predictions>=NET_12_THRESH)
-
-    detectionWindows = detectionWindows[posDetectionIndices]
-    calibPredictions = detectMultiscale.calibrators[curScale]([calibNormalizer.preprocess(detectionWindows), 0])[0]
-    coords = calibrateCoordinates(coords[posDetectionIndices], calibPredictions)
-    coords, picked = nms(coords, predictions[posDetectionIndices])
-
-    if maxStageIdx == 0:
-        return coords.astype(np.int32, copy=False)
-
-    curScale = SCALES[1][0]
-    posDatasetPath, negDatasetPath = (FACE_DATABASE_PATHS[1], NEGATIVE_DATABASE_PATHS[1])
-
-    if detectMultiscale.classifiers.get(curScale) is None:
-        detectMultiscale.classifiers[curScale], detectMultiscale.calibrators[curScale] = (loadNet(1, isCalib) for isCalib in (False, True))
-        detectMultiscale.preprocessors[curScale] = {norm: ImageNormalizer(posDatasetPath, negDatasetPath, norm) for norm in ImageNormalizer.NORM_METHODS}
-
-    detectionWindows = classifierNormalizer.preprocess(detectionWindows[picked])
-    calibNormalizer, classifierNormalizer = (detectMultiscale.preprocessors[curScale][getNormalizationMethod(1, isCalib)] for isCalib in (False, True))
-
-    net24_inputs = getNetworkInputs(img, curScale, coords).astype(np.float)
-    predictions = detectMultiscale.classifiers[curScale]([classifierNormalizer.preprocess(net24_inputs), detectionWindows, 0])[0][:, 1]
-    posDetectionIndices = np.where(predictions>=NET_24_THRESH)
-
-    net24_inputs = net24_inputs[posDetectionIndices]
-    calibPredictions = detectMultiscale.calibrators[curScale]([calibNormalizer.preprocess(net24_inputs), 0])[0]
-    coords = calibrateCoordinates(coords[posDetectionIndices], calibPredictions)
-    coords, picked= nms(coords, predictions[posDetectionIndices])
-
-    if maxStageIdx == 1:
-        return coords.astype(np.int32, copy=False)
-
-    curScale = SCALES[2][0]
-
-    if detectMultiscale.classifiers.get(curScale) is None:
-        detectMultiscale.classifiers[curScale] = load_48net()
-        detectMultiscale.calibrators[curScale] = load_48netcalib()
-
-    net48_inputs = preprocessImages(getNetworkInputs(img, curScale, coords).astype(np.float))
-    predictions = detectMultiscale.classifiers[curScale]([net24_inputs[picked], net48_inputs, 0])[0][:, 1]
-    posDetectionIndices = np.where(predictions>=NET_48_THRESH)
-
-    calibPredictions = detectMultiscale.calibrators[curScale]([net48_inputs[posDetectionIndices], 0])[0]
-    coords = calibrateCoordinates(coords[posDetectionIndices], calibPredictions)
-    coords, picked = nms(coords, predictions[posDetectionIndices], .5)
-    return coords.astype(np.int32, copy=False)
+        if stageIdx == maxStageIdx:
+            return coords.astype(np.int32, copy=False)

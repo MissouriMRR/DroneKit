@@ -33,8 +33,8 @@ class ImageNormalizer():
         with h5py.File(filePath, 'r') as inFile:
           dataset = inFile[DATASET_LABEL]
           if self.X is None: self.X = np.zeros((0, *dataset.shape[1:]), dtype = dataset[0].dtype)
-          self.X = np.vstack((self.X, dataset[min(sampleSize, len(dataset)):]))
-
+          self.X = np.vstack((self.X, dataset[:min(sampleSize, len(dataset))]))
+      
       if normMethod == ImageNormalizer.STANDARD_NORMALIZATION:
         self.preprocessParams['featurewise_center'] = True
         self.preprocessParams['featurewise_std_normalization'] = True
