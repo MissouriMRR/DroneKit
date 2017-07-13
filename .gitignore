@@ -89,12 +89,12 @@ ENV/
 .ropeproject
 
 #Ignore image folders
-/Vision/FaceDetection/Annotated Faces in the Wild/
-/Vision/FaceDetection/Annotated Faces in the Wild/**
-/Vision/FaceDetection/Negative Images/
-/Vision/FaceDetection/Negative Images/**
-/Vision/FaceDetection/aflw/**
-/Vision/FaceDetection/aflw/
+/Vision/Object Detection/Annotated Faces in the Wild/
+/Vision/Object Detection/Annotated Faces in the Wild/**
+/Vision/Object Detection/Negative Images/
+/Vision/Object Detection/Negative Images/**
+/Vision/Object Detection/aflw/**
+/Vision/Object Detection/aflw/
 
 #Ignore dataset files
-/Vision/FaceDetection/data/*.hdf
+/Vision/Object Detection/data/*.hdf
