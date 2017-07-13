@@ -97,6 +97,4 @@ ENV/
 /Vision/FaceDetection/aflw/
 
 #Ignore dataset files
-/Vision/FaceDetection/face*.hdf
-/Vision/FaceDetection/neg*.hdf
-/Vision/FaceDetection/calib*.hdf
+/Vision/FaceDetection/data/*.hdf
