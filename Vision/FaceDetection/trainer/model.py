@@ -3,7 +3,6 @@ __metaclass__ = type
 
 import pickle
 import os
-import multiprocessing
 import cv2
 import numpy as np
 import atexit
@@ -22,11 +21,12 @@ from keras.utils import np_utils
 from keras.callbacks import ModelCheckpoint
 from keras import backend as K
 
-from hyperopt_keras import HyperoptWrapper, getBestParams, DEFAULT_NUM_EVALS, tune
-from FaceDetection import DEBUG
-from preprocess import ImageNormalizer
-from data import SCALES, DATASET_LABEL, FACE_DATABASE_PATHS, NEGATIVE_DATABASE_PATHS
-from util import TempH5pyFile
+from .hyperopt_keras import HyperoptWrapper, getBestParams, DEFAULT_NUM_EVALS, tune
+from .google_storage import upload
+from .task import DEBUG
+from .preprocess import ImageNormalizer
+from .data import SCALES, DATASET_LABEL, FACE_DATABASE_PATHS, NEGATIVE_DATABASE_PATHS
+from .util import TempH5pyFile
 hp = HyperoptWrapper()
 
 NET_FILE_NAMES = {False: {SCALES[0][0]: '12net.hdf', SCALES[1][0]: '24net.hdf', SCALES[2][0]: '48net.hdf'}, 
@@ -42,7 +42,7 @@ OPTIMIZER = SGD
 DEFAULT_BATCH_SIZE = 128
 PREDICTION_BATCH_SIZE = 1024
 DEFAULT_NUM_EPOCHS = 300
-DEFAULT_Q_SIZE = 512
+DEFAULT_Q_SIZE = 2048
 DEBUG_FILE_PATH = 'debug.hdf'
 PARAM_FILE_NAME_FORMAT_STR = '%sparams'
 
@@ -157,6 +157,7 @@ class ObjectClassifier():
         with open(paramFilePath, 'wb') as modelParamFile:
             pickle.dump(trials, modelParamFile, protocol = 2)
 
+        upload(paramFilePath)
         self.update()
 
     def getInputGenerator(self, X, y, normalizers, **normalizerParams):
@@ -450,9 +451,9 @@ class StageThreeCalibrator(ObjectCalibrator):
 MODELS = {False: [StageOneClassifier(), StageTwoClassifier(), StageThreeClassifier()], True: [StageOneCalibrator(), StageTwoCalibrator(), StageThreeCalibrator()]}
 
 if __name__ == '__main__':
-    from dataset import ClassifierDataset
+    from .dataset import ClassifierDataset
     model = StageOneClassifier()
-    X_test_gen, y_test_gen = (np.zeros((0) + (model.inputShape)), np.zeros((0, 1)))
+    X_test_gen, y_test_gen = (np.zeros((0,) + (model.inputShape)), np.zeros((0, 1)))
     posDatasetFilePath, negDatasetFilePath = (FACE_DATABASE_PATHS[model.stageIdx], NEGATIVE_DATABASE_PATHS[model.stageIdx])
     
     yesNo = {True: 'yes', False: 'no'}

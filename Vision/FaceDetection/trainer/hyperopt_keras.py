@@ -10,7 +10,7 @@ from hyperopt import hp, fmin, tpe, STATUS_OK, STATUS_FAIL, Trials, space_eval
 
 DEFAULT_NUM_FOLDS = 3
 DEFAULT_NUM_EPOCHS = 50
-DEFAULT_NUM_EVALS = 20
+DEFAULT_NUM_EVALS = 15
 
 WEIGHTS_FILE_NAME = 'tune.hdf'
 
@@ -36,7 +36,7 @@ class HyperoptWrapper():
 		return self._getParam(hp.loguniform, np.log(low), np.log(high))
 
 def parseParams(params):
-	from model import DROPOUT_PARAM_ID, OPTIMIZER_PARAMS, NORMALIZATION_PARAMS, TRAIN_PARAMS
+	from .model import DROPOUT_PARAM_ID, OPTIMIZER_PARAMS, NORMALIZATION_PARAMS, TRAIN_PARAMS
 	
 	normalizationParams = {}
 	compileParams = {}
@@ -75,8 +75,8 @@ def optimize(func):
 @optimize
 def tune(params, model, posDatasetFilePath, negDatasetFilePath, paths, labels, metric, numFolds = DEFAULT_NUM_FOLDS, numEpochs = DEFAULT_NUM_EPOCHS, 
 	     verbose = True):
-	from dataset import ClassifierDataset
-	from preprocess import ImageNormalizer
+	from .dataset import ClassifierDataset
+	from .preprocess import ImageNormalizer
 
 	log = lambda *args: print(*args) if verbose else None
 

@@ -6,13 +6,14 @@ import os
 
 from sklearn.metrics import f1_score
 
-from dataset import ClassifierDataset
-from preprocess import ImageNormalizer
-from model import DEFAULT_NUM_EPOCHS
+from .dataset import ClassifierDataset
+from .preprocess import ImageNormalizer
+from .model import DEFAULT_NUM_EPOCHS
+from .google_storage import downloadIfAvailable, upload
 
 def train(stageIdx, trainCalib, numEpochs = DEFAULT_NUM_EPOCHS, tune = True):
-    from model import MODELS
-    from data import FACE_DATABASE_PATHS, NEGATIVE_DATABASE_PATHS, CALIBRATION_DATABASE_PATHS, SCALES, DATASET_LABEL, LABELS_LABEL, \
+    from .model import MODELS
+    from .data import FACE_DATABASE_PATHS, NEGATIVE_DATABASE_PATHS, CALIBRATION_DATABASE_PATHS, SCALES, DATASET_LABEL, LABELS_LABEL, \
                      createFaceDataset, createNegativeDataset, createCalibrationDataset, mineNegatives
 
     model = MODELS[trainCalib][stageIdx]
@@ -26,7 +27,7 @@ def train(stageIdx, trainCalib, numEpochs = DEFAULT_NUM_EPOCHS, tune = True):
     paths = [posDatasetFilePath, negDatasetFilePath]
 
     for filePath in datasetCreationMethod.keys():
-        if not os.path.isfile(filePath) and (filePath != calibDatasetFilePath or trainCalib):
+        if not os.path.isfile(filePath) and (filePath != calibDatasetFilePath or trainCalib) and not downloadIfAvailable(filePath):
             datasetCreationMethod[filePath](stageIdx)
 
     if trainCalib:
@@ -42,3 +43,5 @@ def train(stageIdx, trainCalib, numEpochs = DEFAULT_NUM_EPOCHS, tune = True):
         normalizer = ImageNormalizer(posDatasetFilePath, negDatasetFilePath, model.getNormalizationMethod())
         normalizer.addDataAugmentationParams(model.getNormalizationParams())
         model.fit(X_train, X_test, y_train, y_test, normalizer, numEpochs)
+    
+    upload(model.getWeightsFilePath())

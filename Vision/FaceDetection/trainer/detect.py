@@ -3,10 +3,10 @@ from __future__ import absolute_import, division, print_function, unicode_litera
 import cv2
 import numpy as np
 
-from model import MODELS
+from .model import MODELS
 
-from data import numDetectionWindowsAlongAxis, squashCoords, MIN_FACE_SCALE, OFFSET, SCALES, CALIB_PATTERNS_ARR, FACE_DATABASE_PATHS, NEGATIVE_DATABASE_PATHS
-from preprocess import ImageNormalizer
+from .data import numDetectionWindowsAlongAxis, squashCoords, MIN_FACE_SCALE, OFFSET, SCALES, CALIB_PATTERNS_ARR, FACE_DATABASE_PATHS, NEGATIVE_DATABASE_PATHS
+from .preprocess import ImageNormalizer
 
 IOU_THRESH = .5
 NET_12_THRESH = .003

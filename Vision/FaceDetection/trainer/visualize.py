@@ -2,7 +2,7 @@
 import numpy as np
 import cv2
 
-from data import SCALES
+from .data import SCALES
 
 class cv2Window( ):
     def __init__( self, name, type = cv2.WINDOW_AUTOSIZE ):

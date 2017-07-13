@@ -4,10 +4,10 @@ import matplotlib
 import matplotlib.pyplot as plt
 from sklearn.metrics import precision_recall_curve
 
-from model import MODELS
-from dataset import ClassifierDataset
-from data import FACE_DATABASE_PATHS, NEGATIVE_DATABASE_PATHS
-from preprocess import ImageNormalizer
+from .model import MODELS
+from .dataset import ClassifierDataset
+from .data import FACE_DATABASE_PATHS, NEGATIVE_DATABASE_PATHS
+from .preprocess import ImageNormalizer
 
 def plot_precision_recall_vs_threshold(stageIdx, isCalib):
     model = MODELS[isCalib][stageIdx]

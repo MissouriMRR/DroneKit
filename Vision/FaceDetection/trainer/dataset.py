@@ -7,8 +7,8 @@ import atexit
 
 from sklearn.model_selection import StratifiedKFold
 
-from data import DATASET_LABEL, LABELS_LABEL, RANDOM_SEED
-from util import TempH5pyFile
+from .data import DATASET_LABEL, LABELS_LABEL, RANDOM_SEED
+from .util import TempH5pyFile
 
 DEFAULT_NUM_FOLDS = 3
 DEFAULT_PERCENT_TRAIN = .8

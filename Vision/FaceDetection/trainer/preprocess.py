@@ -7,8 +7,8 @@ import numpy as np
 import keras
 from keras.preprocessing.image import ImageDataGenerator
 
-from data import DATASET_LABEL, RANDOM_SEED
-from FaceDetection import DEBUG
+from .data import DATASET_LABEL, RANDOM_SEED
+from .task import DEBUG
 
 DEFAULT_FIT_SAMPLE_SIZE = 100000
 

@@ -9,13 +9,13 @@ import cv2
 import numpy as np
 import sqlite3
 
-from util import static_vars
-from FaceDetection import DEBUG
+from .util import static_vars
+from .task import DEBUG
 
 POSITIVE_IMAGE_DATABASE_FOLDER = 'aflw/data/'
 POSITIVE_IMAGE_FOLDER = POSITIVE_IMAGE_DATABASE_FOLDER + 'flickr/'
 POSITIVE_IMAGE_DATABASE_FILE = os.path.join(POSITIVE_IMAGE_DATABASE_FOLDER, 'aflw.sqlite')
-FACE_DATABASE_PATHS = ('face12.hdf', 'face24.hdf', 'face48.hdf')
+FACE_DATABASE_PATHS = ('data/face12.hdf', 'data/face24.hdf', 'data/face48.hdf')
 TEST_IMAGE_DATABASE_FOLDER = 'Annotated Faces in the Wild/FDDB-folds/'
 TEST_IMAGES_FOLDER = 'Annotated Faces in the Wild/originalPics'
 
@@ -24,7 +24,7 @@ LABELS_LABEL = 'labels'
 CHUNK_SIZE = 256
 
 NEGATIVE_IMAGE_FOLDER = 'Negative Images/images/'
-NEGATIVE_DATABASE_PATHS = ('neg12.hdf', 'neg24.hdf', 'neg48.hdf')
+NEGATIVE_DATABASE_PATHS = ('data/neg12.hdf', 'data/neg24.hdf', 'data/neg48.hdf')
 TARGET_NUM_NEGATIVES_PER_IMG = 40
 TARGET_NUM_NEGATIVES = 300000
 MIN_FACE_SCALE = 80
@@ -32,7 +32,7 @@ OFFSET = 4
 
 SCALES = ((12,12),(24,24),(48,48))
 
-CALIBRATION_DATABASE_PATHS = {SCALES[0][0]:'calib12.hdf',SCALES[1][0]:'calib24.hdf',SCALES[2][0]:'calib48.hdf'}
+CALIBRATION_DATABASE_PATHS = {SCALES[0][0]:'data/calib12.hdf',SCALES[1][0]:'data/calib24.hdf',SCALES[2][0]:'data/calib48.hdf'}
 TARGET_NUM_CALIBRATION_SAMPLES = 337500
 SN = (.83, .91, 1, 1.1, 1.21)
 XN = (-.17, 0, .17)
@@ -61,7 +61,7 @@ def getFaceAnnotations(dbPath = POSITIVE_IMAGE_DATABASE_FILE, posImgFolder = POS
                 imgPath = os.path.join(posImgFolder, str(row[0]))
 
                 if os.path.isfile(imgPath):
-                    getFaceAnnotations.faces.append((imgPath) + (row[1:]))
+                    getFaceAnnotations.faces.append((imgPath,) + (row[1:]))
 
     return getFaceAnnotations.faces
 
