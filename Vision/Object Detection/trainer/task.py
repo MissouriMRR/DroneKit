@@ -36,8 +36,8 @@ if __name__ == '__main__':
 
     if options.testMode:
         from .visualize import visualizer
-        import data
-        visualizer(data.getTestImagePaths(), predictionCallback, WINDOW_TITLE)
+        from .data import getTestImagePaths
+        visualizer(getTestImagePaths(), predictionCallback, WINDOW_TITLE)
     elif options.trainMode:
         from .train import train
         train(int(options.stageIdx), options.trainCalib)
@@ -49,5 +49,5 @@ if __name__ == '__main__':
             liveStream = LiveDisplay(stream, win)
             liveStream.run(predictionCallback)
     elif options.evalMode:
-        from eval import plot_precision_recall_vs_threshold
+        from .eval import plot_precision_recall_vs_threshold
         plot_precision_recall_vs_threshold(int(options.stageIdx), options.trainCalib)

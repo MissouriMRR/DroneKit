@@ -129,7 +129,7 @@ def createNegativeDataset(stageIdx, negImgFolder = NEGATIVE_IMAGE_FOLDER, numNeg
         out.create_dataset(DATASET_LABEL, data = images, chunks = (CHUNK_SIZE,) + (images.shape[1:]))
 
 def mineNegatives(stageIdx, negImgFolder = NEGATIVE_IMAGE_FOLDER, numNegatives = TARGET_NUM_NEGATIVES, debug = DEBUG):
-    from detect import detectMultiscale
+    from .detect import detectMultiscale
 
     fileName = NEGATIVE_DATABASE_PATHS[stageIdx]
     resizeTo = SCALES[stageIdx]

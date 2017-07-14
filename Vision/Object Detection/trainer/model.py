@@ -49,6 +49,16 @@ PARAM_FILE_NAME_FORMAT_STR = '%sparams'
 STAGE_ONE_NOT_TRAINED_ERROR = 'You must train the stage one models before moving onto stage two!'
 STAGE_TWO_NOT_TRAINED_ERROR = 'You must train the stage two models before moving onto stage three!'
 
+# sauce: https://stackoverflow.com/questions/33137741/fastest-way-to-convert-a-dicts-keys-values-from-bytes-to-str-in-python3
+def _convert(data):
+    if isinstance(data, bytes):  return data.decode('ascii')
+    if isinstance(data, dict):   return dict(map(_convert, data.items()))
+    if isinstance(data, tuple):  return map(_convert, data)
+    if isinstance(data, tuple):  return tuple(map(_convert, data))
+    if isinstance(data, list):   return list(map(_convert, data))
+    if isinstance(data, set):    return set(map(_convert, data))
+    return data
+
 @six.add_metaclass(abc.ABCMeta)
 class ObjectClassifier():
     PARAM_SPACE = {
@@ -56,8 +66,8 @@ class ObjectClassifier():
         'dropout1': hp.uniform(0, .75),
         'lr': hp.loguniform(1e-4, .3),
         'batchSize': hp.choice(32, 64, 128, 256),
-        'norm':  hp.choice(ImageNormalizer.STANDARD_NORMALIZATION),
-        'flip': hp.choice(ImageNormalizer.FLIP_HORIZONTAL)
+        'norm':  hp.choice(ImageNormalizer.STANDARD_NORMALIZATION, ImageNormalizer.MIN_MAX_SCALING),
+        'flip': hp.choice(None, ImageNormalizer.FLIP_HORIZONTAL)
     }
 
     DEFAULT_DROPOUT = .3
@@ -132,13 +142,9 @@ class ObjectClassifier():
     def update(self):
         if self.wasTuned():
             with open(self.getParamFilePath(), 'rb') as paramFile:
-                trials = pickle.load(paramFile)
-                best = trials.best_trial['misc']['vals']
-
-                for k, v in best.items():
-                    if type(v) is list:
-                        best[k] = v[0]
-
+                trials = pickle.load(paramFile, encoding='bytes')
+                trials.__dict__  = _convert(trials.__dict__)
+                best = _convert(trials.best_trial['misc']['vals'])
                 self.bestParams = getBestParams(self.getParamSpace(), best)
 
     def compile(self, params = {}, loss = LOSS, metrics = METRICS):
@@ -225,7 +231,7 @@ class ObjectClassifier():
     def predict(self, X, normalizer = None, weightsFilePath = None):
         self.loadModel(weightsFilePath)
         useFastPredict = normalizer is None
-        makePrediction = lambda X: self.predictFunc(X[::-1])[0]
+        makePrediction = lambda X: self.predictFunc(X)[0]
 
         if not useFastPredict:
             batchSize = PREDICTION_BATCH_SIZE
@@ -239,7 +245,7 @@ class ObjectClassifier():
                 for inputArray in X_batch:
                     batches.insert(0, inputArray[:min(PREDICTION_BATCH_SIZE, len(X) - i)])
                 
-                batches.insert(0, 0)
+                batches.append(0)
                 predictions = makePrediction(batches)
                 
                 if i == 0: 
@@ -247,7 +253,7 @@ class ObjectClassifier():
                 
                 y = np.vstack((y, predictions))
         else:
-            X.insert(0, 0)
+            X.append(0)
             y = makePrediction(X)
         
         return y
@@ -281,7 +287,7 @@ class StageOneClassifier(ObjectClassifier):
     def __init__(self):
         self.stageIdx = 0
         super(StageOneClassifier, self).__init__(self.stageIdx)
-
+    
     def __call__(self, compileParams = {}, dropouts = [ObjectClassifier.DEFAULT_DROPOUT]*2, includeTop = True, compile = True):
         inputLayer = Input(shape = self.inputShape)
         conv2D = Conv2D(16, (3, 3), activation = 'relu')(inputLayer)

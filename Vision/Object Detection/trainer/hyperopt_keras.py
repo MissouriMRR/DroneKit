@@ -9,7 +9,7 @@ import atexit
 from hyperopt import hp, fmin, tpe, STATUS_OK, STATUS_FAIL, Trials, space_eval
 
 DEFAULT_NUM_FOLDS = 3
-DEFAULT_NUM_EPOCHS = 50
+DEFAULT_NUM_EPOCHS = 5
 DEFAULT_NUM_EVALS = 15
 
 WEIGHTS_FILE_NAME = 'tune.hdf'
@@ -110,4 +110,4 @@ def tune(params, model, posDatasetFilePath, negDatasetFilePath, paths, labels, m
 	return {'loss': -metricAvg, 'loss_variance': lossVariance, 'status': STATUS_OK}
 
 def getBestParams(paramSpace, best):
-	return space_eval(paramSpace, best)
+	return space_eval(paramSpace, {k: v[0] if type(v) is list else v for k, v in best.items()})

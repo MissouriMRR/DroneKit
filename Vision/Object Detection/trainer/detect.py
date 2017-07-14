@@ -9,7 +9,7 @@ from .data import numDetectionWindowsAlongAxis, squashCoords, MIN_FACE_SCALE, OF
 from .preprocess import ImageNormalizer
 
 IOU_THRESH = .5
-NET_12_THRESH = .003
+NET_12_THRESH = .0032
 NET_24_THRESH = .5
 NET_48_THRESH = .5
 
