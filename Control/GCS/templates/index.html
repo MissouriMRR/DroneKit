@@ -23,34 +23,117 @@
 
   <div id="app" class="flex-container page column">
 
-    <div id="loading_screen" class="centered" style="max-width: 1000px;">
+    <!--<div id="loading_screen" class="centered" style="max-width: 1000px;  display:none;">
 
       <div style="margin-bottom: 25px;">
         <div class="huge-header">gladIS </div>
-        <p>{{ message }}</p>
+        <p>(( loading_message ))</p>
 
       </div>
-    </div>
+    </div>-->
 
-    <div id="vehicle_info" class="center" style="max-width: 1000px;">
+    <div id="important_info" class="centered flex-container" style="text-align: left; justify-content: space-around;">
 
-        <div class="card">
+        <div class="card important">
 
-          <h2>Battery</h2>
+          <h3 style="margin: 5px;">Battery</h3>
 
-          <p>{{ battery_percentage }}</p>
+          <hr style="margin-top: 10px; margin-bottom: 10px; height: 2px;">
+
+          <div style="text-align: left; margin: 5px;">
+
+            Remaining: (( battery_percentage )) %
+            <br>
+            Current Voltage: (( battery_percentage ))
+
+          </div>
 
         </div>
 
-        <div class="card">
+        <div class="card important">
 
-          <h2>State and Atittude/Altitude</h2>
+          <h3 style="margin: 5px;">Vehicle State</h3>
+
+          <hr style="margin-top: 10px; margin-bottom: 10px; height: 2px;">
+
+          <div style="text-align: left; margin: 5px;">
+
+            Altitude: (( altitude )) (m)
+            <br>
+            Atittude: Roll: (( attitude.roll )) Pitch: (( attitude.pitch ))  Yaw: (( attitude.yaw ))
+            <br>
+            Mode: (( mode ))
+
+          </div>
           
         </div>
 
-        <div class="card">
+        <div class="card important">
 
-          <h2>Coordinates</h2>
+          <h3 style="margin: 5px;">Position and Maneuvers</h3>
+
+          <hr style="margin-top: 10px; margin-bottom: 10px; height: 2px;">
+
+          <div style="text-align: left; margin: 5px;">
+
+            <!--X: (( localized.x ))
+            Y: (( localized.y ))-->
+            X: 4.34m
+            <br>
+            Y: 7.59m
+
+          </div>
+          
+        </div>
+
+    </div>
+
+    <div id="secondary_info" class="centered flex-container row" style="flex-wrap: row wrap;justify-content: space-around;">
+
+        <div class="card secondary">
+
+          <h3 style="margin: 5px;">Gimbal</h3>
+
+          <hr style="margin-top: 10px; margin-bottom: 10px; height: 2px;">
+
+          <div style="text-align: left; margin: 5px;">
+
+            Current Mode: Scanning
+            <br>
+            <button style="margin: 10px;">Switch Mode</button>
+
+          </div>
+          
+        </div>
+
+        <div class="card secondary">
+
+          <h3 style="margin: 5px;">Velocity</h3>
+
+          <hr style="margin-top: 10px; margin-bottom: 10px; height: 2px;">
+
+          <div style="text-align: left; margin: 5px;">
+
+            Groundspeed: 0.33 m/s
+            Airspeed: 0.33 m/s
+
+          </div>
+          
+        </div>
+
+        <div class="card secondary">
+
+          <h3 style="margin: 5px;">Misc.</h3>
+
+          <hr style="margin-top: 10px; margin-bottom: 10px; height: 2px;">
+
+          <div style="text-align: left; margin: 5px;">
+
+            Runtime: (min)
+            <br>
+            Armed: 
+
+          </div>
           
         </div>
 
