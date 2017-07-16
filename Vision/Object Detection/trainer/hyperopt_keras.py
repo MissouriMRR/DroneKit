@@ -9,8 +9,8 @@ import atexit
 from hyperopt import hp, fmin, tpe, STATUS_OK, STATUS_FAIL, Trials, space_eval
 
 DEFAULT_NUM_FOLDS = 3
-DEFAULT_NUM_EPOCHS = 5
-DEFAULT_NUM_EVALS = 15
+DEFAULT_NUM_EPOCHS = 50
+DEFAULT_NUM_EVALS = 30
 
 WEIGHTS_FILE_NAME = 'tune.hdf'
 
@@ -73,8 +73,7 @@ def optimize(func):
 	return decorate
 
 @optimize
-def tune(params, model, posDatasetFilePath, negDatasetFilePath, paths, labels, metric, numFolds = DEFAULT_NUM_FOLDS, numEpochs = DEFAULT_NUM_EPOCHS, 
-	     verbose = True):
+def tune(params, model, datasetManager, labels, metric, numFolds = DEFAULT_NUM_FOLDS, numEpochs = DEFAULT_NUM_EPOCHS, verbose = True):
 	from .dataset import ClassifierDataset
 	from .preprocess import ImageNormalizer
 
@@ -85,19 +84,21 @@ def tune(params, model, posDatasetFilePath, negDatasetFilePath, paths, labels, m
 	normMethod = normalizationParams['norm']
 	del normalizationParams['norm']
 
+	paths = datasetManager.getPaths()
+
 	with ClassifierDataset(paths[0], paths[1], labels) as dataset:
 		scores = []
 
-		normalizer = ImageNormalizer(posDatasetFilePath, negDatasetFilePath, normMethod)
+		normalizer = ImageNormalizer(datasetManager.getPosDatasetFilePath(), datasetManager.getNegDatasetFilePath(), normMethod)
 		normalizer.addDataAugmentationParams(normalizationParams)
 		fitParams = {'compileParams': compileParams, 'dropouts': dropouts, 'batchSize': batchSize, 'verbose': False, 'saveFilePath': WEIGHTS_FILE_NAME}
 
 		for i, (X_train, X_test, y_train, y_test) in enumerate(dataset.stratifiedSplitter(numFolds)):
-			model.fit(X_train, X_test, y_train, y_test, normalizer, numEpochs, **fitParams)
+			model.fit(X_train, X_test, y_train, y_test, datasetManager, normalizer, numEpochs, **fitParams)
 
 			if not i: log('Using params:', params)
 			metricParams = {'average': 'binary' if np.amax(y_test) == 1 else 'macro'}
-			scores.append(model.eval(X_test, y_test, normalizer, metric, weightsFilePath = WEIGHTS_FILE_NAME, **metricParams))
+			scores.append(model.eval(X_test, y_test, normalizer, metric, weightsFilePath = WEIGHTS_FILE_NAME, datasetManager = datasetManager, **metricParams))
 			log('Fold %d score: %.5f' % (i, scores[-1]))
 
 		metricAvg = np.mean(np.array(scores), dtype = np.float64)

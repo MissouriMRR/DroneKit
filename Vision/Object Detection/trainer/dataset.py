@@ -20,7 +20,7 @@ class ClassifierDataset():
         self.posDatasetFilePath = posDatasetFilePath
         self.negDatasetFilePath = negDatasetFilePath
         self.labels = labels
-        self.refCount = 0 
+        self.refCount = 0
 
     def __enter__(self):
         self.refCount += 1

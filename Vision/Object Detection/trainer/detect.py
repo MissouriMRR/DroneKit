@@ -5,12 +5,12 @@ import numpy as np
 
 from .model import MODELS
 
-from .data import numDetectionWindowsAlongAxis, squashCoords, MIN_FACE_SCALE, OFFSET, SCALES, CALIB_PATTERNS_ARR, FACE_DATABASE_PATHS, NEGATIVE_DATABASE_PATHS
+from .data import numDetectionWindowsAlongAxis, squashCoords, MIN_FACE_SCALE, OFFSET, SCALES, CALIB_PATTERNS_ARR, OBJECT_DATABASE_PATHS, NEGATIVE_DATABASE_PATHS
 from .preprocess import ImageNormalizer
 
 IOU_THRESH = .5
 NET_12_THRESH = .0032
-NET_24_THRESH = .5
+NET_24_THRESH = .357
 NET_48_THRESH = .5
 
 def IoU(boxes, box, area=None):
@@ -67,7 +67,7 @@ NORMALIZERS = []
 THRESHOLDS = (NET_12_THRESH, NET_24_THRESH, NET_48_THRESH)
 
 for stageIdx in np.arange(1):
-    PATHS.append((FACE_DATABASE_PATHS[stageIdx], NEGATIVE_DATABASE_PATHS[stageIdx]))
+    PATHS.append((OBJECT_DATABASE_PATHS[stageIdx], NEGATIVE_DATABASE_PATHS[stageIdx]))
     NORMALIZERS.append(tuple((ImageNormalizer(PATHS[stageIdx][0], PATHS[stageIdx][1], MODELS[stageIdx][isCalib].getNormalizationMethod()) for isCalib in (0, 1))))
 
 def detectMultiscale(img, maxStageIdx=len(SCALES)-1, minFaceScale = MIN_FACE_SCALE):

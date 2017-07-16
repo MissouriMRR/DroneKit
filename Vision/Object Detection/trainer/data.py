@@ -1,4 +1,5 @@
 from __future__ import absolute_import, division, print_function, unicode_literals
+__metaclass__ = type
 
 import random
 import os
@@ -11,11 +12,12 @@ import sqlite3
 
 from .util import static_vars
 from .task import DEBUG
+from .google_storage import downloadIfAvailable
 
 POSITIVE_IMAGE_DATABASE_FOLDER = 'aflw/data/'
 POSITIVE_IMAGE_FOLDER = POSITIVE_IMAGE_DATABASE_FOLDER + 'flickr/'
 POSITIVE_IMAGE_DATABASE_FILE = os.path.join(POSITIVE_IMAGE_DATABASE_FOLDER, 'aflw.sqlite')
-FACE_DATABASE_PATHS = ('data/face12.hdf', 'data/face24.hdf', 'data/face48.hdf')
+OBJECT_DATABASE_PATHS = ('data/pos12.hdf', 'data/pos24.hdf', 'data/pos48.hdf')
 TEST_IMAGE_DATABASE_FOLDER = 'Annotated Faces in the Wild/FDDB-folds/'
 TEST_IMAGES_FOLDER = 'Annotated Faces in the Wild/originalPics'
 
@@ -30,9 +32,9 @@ TARGET_NUM_NEGATIVES = 300000
 MIN_FACE_SCALE = 80
 OFFSET = 4
 
-SCALES = ((12,12),(24,24),(48,48))
+SCALES = ((12,12), (24,24), (48,48))
 
-CALIBRATION_DATABASE_PATHS = {SCALES[0][0]:'data/calib12.hdf',SCALES[1][0]:'data/calib24.hdf',SCALES[2][0]:'data/calib48.hdf'}
+CALIBRATION_DATABASE_PATHS = {SCALES[0][0]:'data/calib12.hdf', SCALES[1][0]:'data/calib24.hdf', SCALES[2][0]:'data/calib48.hdf'}
 TARGET_NUM_CALIBRATION_SAMPLES = 337500
 SN = (.83, .91, 1, 1.1, 1.21)
 XN = (-.17, 0, .17)
@@ -72,19 +74,15 @@ def squashCoords(img, x, y, w, h):
     w = min(img.shape[1]-x, w)
     return (x, y, w, h)
 
-def debug_showImage(img):
-    cv2.imshow('debug', img)
-    cv2.waitKey()
-
-def createFaceDataset(stageIdx, debug = DEBUG):
-    fileName = FACE_DATABASE_PATHS[stageIdx]
+def createPositiveDataset(stageIdx, getObjectAnnotations = getFaceAnnotations, posImgFolder = POSITIVE_IMAGE_FOLDER):
+    fileName = OBJECT_DATABASE_PATHS[stageIdx]
     resizeTo = SCALES[stageIdx]
-    faceAnnotations = getFaceAnnotations()
-    images = np.zeros((len(faceAnnotations), resizeTo[1], resizeTo[0], 3), dtype = np.uint8)
+    objectAnnotations = getObjectAnnotations(posImgFolder = posImgFolder)
+    images = np.zeros((len(objectAnnotations), resizeTo[1], resizeTo[0], 3), dtype = np.uint8)
     curImg = None
     prevImgPath = None
 
-    for i, (imgPath, x, y, w, h) in enumerate(faceAnnotations):
+    for i, (imgPath, x, y, w, h) in enumerate(objectAnnotations):
         if imgPath != prevImgPath:
             curImg = cv2.imread(imgPath)
 
@@ -95,7 +93,7 @@ def createFaceDataset(stageIdx, debug = DEBUG):
     with h5py.File(fileName, 'w') as out:
         out.create_dataset(DATASET_LABEL, data = images, chunks = (CHUNK_SIZE,) + (images.shape[1:]))
 
-def createNegativeDataset(stageIdx, negImgFolder = NEGATIVE_IMAGE_FOLDER, numNegatives = TARGET_NUM_NEGATIVES, numNegativesPerImg = TARGET_NUM_NEGATIVES_PER_IMG, debug = DEBUG):
+def createNegativeDataset(stageIdx, negImgFolder = NEGATIVE_IMAGE_FOLDER, numNegatives = TARGET_NUM_NEGATIVES, numNegativesPerImg = TARGET_NUM_NEGATIVES_PER_IMG):
     fileName = NEGATIVE_DATABASE_PATHS[stageIdx]
     resizeTo = SCALES[stageIdx]
     negativeImagePaths = [os.path.join(negImgFolder, fileName) for fileName in os.listdir(negImgFolder)]
@@ -123,12 +121,11 @@ def createNegativeDataset(stageIdx, negImgFolder = NEGATIVE_IMAGE_FOLDER, numNeg
 
     if negIdx < len(images)-1:
         images = np.delete(images, np.s_[negIdx:], 0)
-        if debug: print(images.shape)
 
     with h5py.File(fileName, 'w') as out:
         out.create_dataset(DATASET_LABEL, data = images, chunks = (CHUNK_SIZE,) + (images.shape[1:]))
 
-def mineNegatives(stageIdx, negImgFolder = NEGATIVE_IMAGE_FOLDER, numNegatives = TARGET_NUM_NEGATIVES, debug = DEBUG):
+def mineNegatives(stageIdx, negImgFolder = NEGATIVE_IMAGE_FOLDER, numNegatives = TARGET_NUM_NEGATIVES):
     from .detect import detectMultiscale
 
     fileName = NEGATIVE_DATABASE_PATHS[stageIdx]
@@ -148,21 +145,18 @@ def mineNegatives(stageIdx, negImgFolder = NEGATIVE_IMAGE_FOLDER, numNegatives =
             images[negIdx] = cv2.resize(img[yMin:yMin+h, xMin:xMin+w], resizeTo)
             negIdx += 1
 
-        if debug: print(negIdx)
-
     if negIdx < len(images)-1:
         images = np.delete(images, np.s_[negIdx:], 0)
-        if debug: print(images.shape)
 
     with h5py.File(fileName, 'w') as out:
         out.create_dataset(DATASET_LABEL, data = images, chunks = (CHUNK_SIZE,) + (images.shape[1:]))
 
-def createCalibrationDataset(stageIdx, numCalibrationSamples = TARGET_NUM_CALIBRATION_SAMPLES, calibPatterns = CALIB_PATTERNS, debug = DEBUG):
+def createCalibrationDataset(stageIdx, getObjectAnnotations = getFaceAnnotations, posImgFolder = POSITIVE_IMAGE_FOLDER, numCalibrationSamples = TARGET_NUM_CALIBRATION_SAMPLES, calibPatterns = CALIB_PATTERNS):
     numCalibrationSamples = math.inf if numCalibrationSamples is None else numCalibrationSamples
-    faceAnnotations = getFaceAnnotations()
+    objectAnnotations = getObjectAnnotations(posImgFolder = posImgFolder)
 
     resizeTo = SCALES[stageIdx]
-    datasetLen = len(faceAnnotations)*len(calibPatterns) if numCalibrationSamples == math.inf else numCalibrationSamples
+    datasetLen = len(objectAnnotations)*len(calibPatterns) if numCalibrationSamples == math.inf else numCalibrationSamples
     dataset = np.zeros((datasetLen, resizeTo[1], resizeTo[0], 3), np.uint8)
     labels = np.zeros((datasetLen, 1))
     sampleIdx = 0
@@ -172,7 +166,7 @@ def createCalibrationDataset(stageIdx, numCalibrationSamples = TARGET_NUM_CALIBR
     curImg = None
     prevImgPath = None
     
-    for i, (imgPath, x, y, w, h) in enumerate(faceAnnotations):
+    for i, (imgPath, x, y, w, h) in enumerate(objectAnnotations):
         if sampleIdx >= numCalibrationSamples: break
 
         if imgPath != prevImgPath:
@@ -192,8 +186,6 @@ def createCalibrationDataset(stageIdx, numCalibrationSamples = TARGET_NUM_CALIBR
         labels = np.delete(labels, np.s_[sampleIdx:], 0)
         dataset = np.delete(dataset, np.s_[sampleIdx:], 0)
 
-    if debug: print(dataset.shape, labels.shape)
-
     with h5py.File(fileName, 'w') as out:
         out.create_dataset(LABELS_LABEL, data = labels, chunks = (CHUNK_SIZE, 1))
         out.create_dataset(DATASET_LABEL, data = dataset, chunks = (CHUNK_SIZE, resizeTo[1], resizeTo[0], 3))
@@ -207,3 +199,67 @@ def getTestImagePaths(testImgDbFolder = TEST_IMAGE_DATABASE_FOLDER, testImgsFold
                 imgPaths.extend(inFile.read().splitlines())
 
     return [os.path.join(testImgsFolder, imgPath) + '.jpg' for imgPath in imgPaths]
+
+class DatasetManager():
+    normalizers = {}
+
+    def __init__(self, model, getObjectAnnotations = getFaceAnnotations, posImgFolder = POSITIVE_IMAGE_FOLDER, negImgFolder = NEGATIVE_IMAGE_FOLDER):
+        from .model import ObjectCalibrator
+        self.model = model
+        self.isCalib = isinstance(self.model, ObjectCalibrator)
+        self.stageIdx = model.getStageIdx()
+        self.posDatasetFilePath = OBJECT_DATABASE_PATHS[self.stageIdx]
+        self.negDatasetFilePath = NEGATIVE_DATABASE_PATHS[self.stageIdx]
+        self.calibDatasetFilePath = CALIBRATION_DATABASE_PATHS[SCALES[self.stageIdx][0]]
+        self.posImgFolder = posImgFolder
+        self.negImgFolder = negImgFolder
+
+        self.getObjectAnnotations = getObjectAnnotations
+
+    def getParams(self):
+        return {'getObjectAnnotations': self.getObjectAnnotations, 'posImgFolder': self.posImgFolder, 'negImgFolder': self.negImgFolder}
+
+    def _createFile(self, fileName, **kwargs):
+        if not os.path.isfile(fileName) and not downloadIfAvailable(fileName):
+            if fileName in OBJECT_DATABASE_PATHS:
+                createPositiveDataset(self.stageIdx, **kwargs)
+            elif fileName in  NEGATIVE_DATABASE_PATHS:
+                (createNegativeDataset if self.stageIdx == 0 else mineNegatives)(self.stageIdx, **kwargs)
+            elif fileName in CALIBRATION_DATABASE_PATHS:
+                createCalibrationDataset(self.stageIdx, **kwargs)
+
+    def getPosDatasetFilePath(self):
+        self._createFile(self.posDatasetFilePath, posImgFolder = self.posImgFolder, getObjectAnnotations = self.getObjectAnnotations)
+        return self.posDatasetFilePath
+
+    def getNegDatasetFilePath(self):
+        self._createFile(self.negDatasetFilePath, negImgFolder = self.negImgFolder)
+        return self.negDatasetFilePath
+
+    def getCalibDatasetFilePath(self):
+        if self.isCalib: self._createFile(self.calibDatasetFilePath, posImgFolder = self.posImgFolder, getObjectAnnotations = self.getObjectAnnotations)
+        return self.calibDatasetFilePath
+
+    def getLabels(self):
+        labels = None
+
+        if self.isCalib:
+            calibDatasetFilePath = self.getCalibDatasetFilePath()
+
+            with h5py.File(calibDatasetFilePath, 'r') as calibDatasetFile:
+                labels = calibDatasetFile[LABELS_LABEL][:]
+
+        return labels
+
+    def getNormalizer(self):
+        from .preprocess import ImageNormalizer
+
+        if DatasetManager.normalizers.get(self.model) is None:
+            normalizer = ImageNormalizer(self.getPosDatasetFilePath(), self.getNegDatasetFilePath(), self.model.getNormalizationMethod())
+            normalizer.addDataAugmentationParams(self.model.getNormalizationParams())
+            DatasetManager.normalizers[self.model] = normalizer
+
+        return DatasetManager.normalizers[self.model]
+
+    def getPaths(self):
+        return [self.getPosDatasetFilePath(), self.getNegDatasetFilePath()] if not self.isCalib else [self.getCalibDatasetFilePath(), None]

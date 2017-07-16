@@ -25,5 +25,5 @@ def upload(filePath):
     fileName = os.path.basename(filePath)
     client = storage.Client()
     bucket = client.get_bucket(BUCKET_NAME)
-    blob = Blob(fileName, bucket)
+    blob = Blob(os.path.join(DATA_FOLDER_NAME, fileName), bucket)
     blob.upload_from_filename(filePath)
