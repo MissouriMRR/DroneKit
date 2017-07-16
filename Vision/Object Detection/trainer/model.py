@@ -148,7 +148,8 @@ class ObjectClassifier():
     def update(self):
         if self.wasTuned():
             with open(self.getParamFilePath(), 'rb') as paramFile:
-                trials = pickle.load(paramFile, encoding='bytes')
+                loadArgs = {} if six.PY2 else {'encoding': 'bytes'}
+                trials = pickle.load(paramFile, **loadArgs)
                 trials.__dict__  = _convert(trials.__dict__)
                 best = _convert(trials.best_trial['misc']['vals'])
                 self.bestParams = getBestParams(self.getParamSpace(), best)

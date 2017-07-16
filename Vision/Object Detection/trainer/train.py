@@ -1,9 +1,5 @@
 from __future__ import absolute_import, division, print_function, unicode_literals
 
-import pickle
-import h5py
-import os
-
 from sklearn.metrics import f1_score
 
 from .dataset import ClassifierDataset
