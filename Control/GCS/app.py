@@ -32,10 +32,8 @@ def index():
 @socketio.on('connect')
 def on_connect():
     send('Initialization in progress...')
+    tower.initialize()
     emit('status', {'status': get_vehicle_status()})
-    # emit('status', {'status': 'hello world'})
-
-
 
 
 if __name__ == '__main__':
