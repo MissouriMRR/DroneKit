@@ -1,0 +1,6 @@
+- name: Sentinel
+  battery:
+    full_voltage: 18.00
+- name: Bebop
+  battery:
+    full_voltage: 12.20
