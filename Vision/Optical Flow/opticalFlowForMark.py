@@ -38,7 +38,7 @@ try:
       region_area = REGION_SIZE ** 2
       depth_image_area = np.prod(depth_image.shape[:2])
       X = (np.arange(depth_image_area) % depth_image.shape[1]).reshape(*depth_image.shape[:2])
-      Y = (np.arange(depth_image_area) % depth_image.shape[0]).reshape(*depth_image.shape[-2::1]).transpose()
+      Y = (np.arange(depth_image_area) % depth_image.shape[0]).reshape(*depth_image.shape[-2::-1]).transpose()
       
       average_depth = np.sum(((Y * depth_image + X)*depth_scale)[region_start[0]:region_end[0], region_start[1]:region_end[1]])/region_area
       return average_depth
