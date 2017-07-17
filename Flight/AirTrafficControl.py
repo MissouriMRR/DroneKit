@@ -198,14 +198,12 @@ class Tower(object):
   def map(self, x, in_min, in_max, out_min, out_max):
     """
     @purpose: Re-maps a number from one range to another.
-
     @args:
       x: the number to map
       in_min: the lower bound of the value's current range
       in_max: the upper bound of the value's current range
       out_min: the lower bound of the value's target range
       out_max: the upper bound of the value's target range
-
     @returns:
       The mapped value.
     """
@@ -216,7 +214,6 @@ class Tower(object):
     @purpose: Send an specified attitude message to the
               flight controller. For more information, see
               http://mavlink.org/messages/common#SET_ATTITUDE_TARGET.
-
     @args:
       attitude: A DroneAtittude object containing a target attitude.
       thrust: A collective thrust from 0 to 1. Thrust is converted to
@@ -244,7 +241,10 @@ class Tower(object):
     self.last_attitude = attitude
     self.last_thrust = thrust
 
-  def mission1(self,direction,speed,distance,height):
+#mission one uses the drone, x, y, or z direction, desired speed, distance desired and the height that is wanted   
+#Utilizes "send_ned_velocity()" so this requires an Optical Flow sensor or GPS to be enabled to utilize this command 
+
+  def mission1(self,distance,height):
     self.STATE = VehicleStates.takeoff
 
     self.arm_drone()
@@ -257,38 +257,39 @@ class Tower(object):
       sleep(self.STANDARD_SLEEP_TIME)
 
     print('Reached target altitude:{0:.2f}m'.format(self.vehicle.location.global_relative_frame.alt))
-    if(direction == x):
-      duration = (distance/speed)
-      send_ned_velocity(speed, 0, 0, duration)
-    elif(direction == y):
-      duration = (distance/speed)
-      send_ned_velocity(0, speed, 0, duration)
-    elif(direction == z):
-      duration = (distance/speed)
-      send_ned_velocity(0, 0, speed, duration)
-    else:
-      print ("Not a proper direction")
-      self.land()
-
-  def send_ned_velocity(velocity_x, velocity_y, velocity_z, duration):
-      """
-      Move vehicle in direction based on specified velocity vectors.
-      """
-      msg = vehicle.message_factory.set_position_target_local_ned_encode(
-          0,       # time_boot_ms (not used)
-          0, 0,    # target system, target component
-          mavutil.mavlink.MAV_FRAME_LOCAL_NED, # frame
-          0b0000111111000111, # type_mask (only speeds enabled)
-          0, 0, 0, # x, y, z positions (not used)
-          velocity_x, velocity_y, velocity_z, # x, y, z velocity in m/s
-          0, 0, 0, # x, y, z acceleration (not supported yet, ignored in GCS_Mavlink)
-          0, 0)    # yaw, yaw_rate (not supported yet, ignored in GCS_Mavlink)
+    #utilizes desired direction that was input to move
+    self.vehicle.mode = dronekit.VehicleMode("GUIDED_NoGPS")
+    #for X axis
+    initial_lat = self.vehicle.location.global_relative_frame.lat
+    #for Y axis
+    initial_lon = self.vehicle.location.global_relative_frame.lon
+    while((self.vehicle.location.global_relative_frame.lon - initial_lon) < distance):
+      self.set_angle_thrust(StandardAttitudes.forward, StandardThrusts.hover)
+    print "Reached target distance. \nNow Landing!"
+    self.land()
 
 
-      # send command to vehicle on 1 Hz cycle
-      for x in range(0,duration):
-          vehicle.send_mavlink(msg)
-          time.sleep(1)
+# #Mavlink message that uses duration and velocity in needed to direction to travel
+# #requires an Optical Flow sensor or GPS to be enabled to utilize this command     
+#   def send_ned_velocity(velocity_x, velocity_y, velocity_z, duration):
+#       """
+#       Move vehicle in direction based on specified velocity vectors.
+#       """
+#       msg = vehicle.message_factory.set_position_target_local_ned_encode(
+#           0,       # time_boot_ms (not used)
+#           0, 0,    # target system, target component
+#           mavutil.mavlink.MAV_FRAME_LOCAL_NED, # frame
+#           0b0000111111000111, # type_mask (only speeds enabled)
+#           1, 1, 1, # x, y, z positions
+#           velocity_x, velocity_y, velocity_z, # x, y, z velocity in m/s
+#           0, 0, 0, # x, y, z acceleration (not supported yet, ignored in GCS_Mavlink)
+#           0, 0)    # yaw, yaw_rate (not supported yet, ignored in GCS_Mavlink)
+
+
+#       # send command to vehicle on 1 Hz cycle
+#       for x in range(0,duration):
+#           vehicle.send_mavlink(msg)
+#           time.sleep(1)
 
 
   def hover(self, duration=None):
@@ -415,7 +416,7 @@ class Tower(object):
 
   def checkGimbal(self):
       degYaw = int(math.degrees(self.vehicle.attitude.yaw))
-      degPitch = -int(math.degrees(self.vehicle.attitude.pitch))
+      degPitch = int(math.degrees(self.vehicle.attitude.pitch))
       degRoll = int(math.degrees(self.vehicle.attitude.roll))
       print("\nYaw: {0}".format(degYaw))
       print("\nPitch: {0}".format(degPitch))
