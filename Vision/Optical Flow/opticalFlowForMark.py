@@ -48,6 +48,7 @@ try:
         print('Average depth:', get_average_depth())
         cv2.imshow('color', cam.color)
         cv2.imshow('depth', cam.depth)
+        cv2.waitKey(1)
 
 finally:
     pyrs.stop()
