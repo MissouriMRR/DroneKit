@@ -9,6 +9,7 @@ import atexit
 import copy
 import time
 import six
+import gc
 import abc
 from abc import abstractmethod
 from collections import Iterable
@@ -23,7 +24,7 @@ from keras.callbacks import ModelCheckpoint
 from keras import backend as K
 
 from .hyperopt_keras import HyperoptWrapper, getBestParams, DEFAULT_NUM_EVALS, tune
-from .google_storage import upload
+from .google_storage import upload, downloadIfAvailable
 from .task import DEBUG
 from .preprocess import ImageNormalizer
 from .data import SCALES, DATASET_LABEL, DatasetManager
@@ -41,9 +42,9 @@ TRAIN_PARAMS = ['batchSize']
 OPTIMIZER = SGD
 
 DEFAULT_BATCH_SIZE = 128
-PREDICTION_BATCH_SIZE = 1024
+PREDICTION_BATCH_SIZE = 256
 DEFAULT_NUM_EPOCHS = 300
-DEFAULT_Q_SIZE = 512
+DEFAULT_Q_SIZE =  10
 DEBUG_FILE_PATH = 'debug.hdf'
 PARAM_FILE_NAME_FORMAT_STR = '%sparams'
 
@@ -94,13 +95,17 @@ class ObjectClassifier():
         return self.stageIdx
     
     def getParamFilePath(self):
-        return PARAM_FILE_NAME_FORMAT_STR % (os.path.splitext(self.getWeightsFilePath())[0],)
+        paramFilePath = PARAM_FILE_NAME_FORMAT_STR % (os.path.splitext(self.getWeightsFilePath())[0],)
+        if not os.path.isfile(paramFilePath): downloadIfAvailable(paramFilePath)
+        return paramFilePath
 
     def getParamSpace(self):
         return self.PARAM_SPACE
 
     def getWeightsFilePath(self):
-        return NET_FILE_NAMES[isinstance(self, ObjectCalibrator)][SCALES[self.stageIdx][0]]
+        weightsFilePath = NET_FILE_NAMES[isinstance(self, ObjectCalibrator)][SCALES[self.stageIdx][0]]
+        if not os.path.isfile(weightsFilePath): downloadIfAvailable(weightsFilePath)
+        return weightsFilePath
 
     def getNormalizationMethod(self):
         return self.bestParams['norm'] if self.wasTuned() else ImageNormalizer.STANDARD_NORMALIZATION
@@ -220,6 +225,7 @@ class ObjectClassifier():
         del self.trainedModel
         self.trainedModel = None
         K.clear_session()
+        gc.collect()
 
     def loadModel(self, weightsFilePath = None):
         if self.trainedModel is None:
@@ -249,8 +255,13 @@ class ObjectClassifier():
                 X_batch, y_batch = next(inputGenerator)
                 batches = []
 
-                for inputArray in X_batch:
-                    batches.insert(0, inputArray[:min(PREDICTION_BATCH_SIZE, len(X) - i)])
+                for j, inputArray in enumerate(X_batch):
+                    arraySlice = inputArray[:min(PREDICTION_BATCH_SIZE, len(X) - i)]
+
+                    if j < 2:
+                        batches.insert(0, arraySlice)
+                    else:
+                        batches.append(arraySlice)
                 
                 batches.append(0)
                 predictions = makePrediction(batches)
@@ -365,6 +376,20 @@ class StageTwoClassifier(ObjectClassifier):
         return self.model
 
 class StageThreeClassifier(ObjectClassifier):
+    # temporary patch for HyperoptWrapper bug. need to change HyperoptWrapper class and retune everything to fix
+    HP = HyperoptWrapper()
+    PARAM_SPACE = {
+        'dropout0': HP.uniform(0, .75),
+        'dropout1': HP.uniform(0, .75),
+        'lr': HP.loguniform(1e-4, 1),
+        'batchSize': HP.choice(512),
+        'norm':  HP.choice(ImageNormalizer.STANDARD_NORMALIZATION),
+        'flip': HP.choice(ImageNormalizer.FLIP_HORIZONTAL),
+        'momentum': HP.choice(.9),
+        'decay': HP.choice(1e-4),
+        'nesterov': HP.choice(True)
+    }
+
     def __init__(self):
         self.stageIdx = 2
         super(StageThreeClassifier, self).__init__(self.stageIdx)
@@ -461,6 +486,20 @@ class StageTwoCalibrator(ObjectCalibrator):
         return self.model
 
 class StageThreeCalibrator(ObjectCalibrator):
+    #TODO: Fix HyperoptWrapper class
+    HP = HyperoptWrapper()
+    PARAM_SPACE = {
+        'dropout0': HP.uniform(0, .75),
+        'dropout1': HP.uniform(0, .75),
+        'lr': HP.loguniform(1e-9, 1),
+        'batchSize': HP.choice(512),
+        'norm':  HP.choice(ImageNormalizer.STANDARD_NORMALIZATION),
+        'flip': HP.choice(None),
+        'momentum': HP.choice(.9),
+        'decay': HP.choice(1e-4),
+        'nesterov': HP.choice(True)
+    }
+
     def __init__(self):
         self.stageIdx = 2
         super(StageThreeCalibrator, self).__init__(self.stageIdx)

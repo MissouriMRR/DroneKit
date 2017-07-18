@@ -56,5 +56,7 @@ if __name__ == '__main__':
             liveStream = LiveDisplay(stream, win)
             liveStream.run(predictionCallback)
     elif options.evalMode:
-        from .eval import plot_precision_recall_vs_threshold
-        plot_precision_recall_vs_threshold(model, datasetManager)
+        from .eval import ModelEvaluator
+        
+        with ModelEvaluator(model, datasetManager) as evaluator:
+            evaluator.summary()

@@ -15,6 +15,6 @@ def train(model, datasetManager, numEpochs = DEFAULT_NUM_EPOCHS, tune = True):
 
     with ClassifierDataset(paths[0], paths[1], labels) as dataset:
         X_train, X_test, y_train, y_test = dataset.getStratifiedTrainingSet()
-        model.fit(X_train, X_test, y_train, y_test, datasetManager, numEpochs)
+        model.fit(X_train, X_test, y_train, y_test, datasetManager, numEpochs = numEpochs)
     
     upload(model.getWeightsFilePath())

@@ -10,8 +10,13 @@ from .preprocess import ImageNormalizer
 
 IOU_THRESH = .5
 NET_12_THRESH = .0032
-NET_24_THRESH = .357
+NET_24_THRESH = .03
 NET_48_THRESH = .5
+
+GOLDEN_RATIO = (1+5**.5)/2
+
+NUM_PYRAMID_LEVELS = 10
+PYRAMID_DOWNSCALE = 1.18
 
 def IoU(boxes, box, area=None):
     int_x1, int_y1, int_x2, int_y2 = ((np.maximum if i < 2 else np.minimum)(boxes[:, i], box[i]) for i in np.arange(boxes.shape[1]))
@@ -34,15 +39,32 @@ def nms(boxes, predictions, iouThresh = IOU_THRESH):
     
     return boxes[picked], picked
 
-def getDetectionWindows(img, scale, minFaceScale = MIN_FACE_SCALE):
-    resized = cv2.resize(img, None, fx = scale/minFaceScale, fy = scale/minFaceScale)
-    numDetectionWindows = numDetectionWindowsAlongAxis(resized.shape[0])*numDetectionWindowsAlongAxis(resized.shape[1])
+def local_nms(boxes, predictions, pyrIdxs, iouThresh = IOU_THRESH):
+    suppressedBoxes = np.zeros((0, *boxes.shape[1:]))
+    prevIdx = 0
+    newPyrIdxs = []
+    picked = []
+
+    for curIdx in pyrIdxs:
+        localSuppressedBoxes, localPicked = nms(boxes[prevIdx:curIdx], predictions[prevIdx:curIdx], iouThresh)
+        suppressedBoxes = np.vstack((suppressedBoxes, localSuppressedBoxes))
+        picked.extend(localPicked)
+        prevIdx = curIdx
+        newPyrIdxs.append(suppressedBoxes.shape[0])
+
+    return suppressedBoxes, picked, newPyrIdxs
+
+def getDetectionWindows(img, scale, minFaceScale = MIN_FACE_SCALE, numPyramidLevels = NUM_PYRAMID_LEVELS, pyramidDownscale = PYRAMID_DOWNSCALE):
+    numPyramidLevels = min(int(np.log(min(img.shape[:2])/minFaceScale)/np.log(pyramidDownscale)), numPyramidLevels)
+    resized = [cv2.resize(img, None, fx = scale/(minFaceScale*pyramidDownscale**i), fy = scale/(minFaceScale*pyramidDownscale**i)) for i in np.arange(numPyramidLevels)]
+    numDetectionWindows = sum((numDetectionWindowsAlongAxis(img.shape[0])*numDetectionWindowsAlongAxis(img.shape[1]) for img in resized))
     yield numDetectionWindows
 
-    for yIdx in np.arange(numDetectionWindowsAlongAxis(resized.shape[0])):
-        for xIdx in np.arange(numDetectionWindowsAlongAxis(resized.shape[1])):
-            xMin, yMin, xMax, yMax = (xIdx*OFFSET, yIdx*OFFSET, xIdx*OFFSET+scale, yIdx*OFFSET+scale)
-            yield (xMin, yMin, xMax, yMax, resized[yMin:yMax, xMin:xMax])
+    for pyrLevel, img in enumerate(resized):
+        for yIdx in np.arange(numDetectionWindowsAlongAxis(img.shape[0])):
+            for xIdx in np.arange(numDetectionWindowsAlongAxis(img.shape[1])):
+                xMin, yMin, xMax, yMax = (xIdx*OFFSET, yIdx*OFFSET, xIdx*OFFSET+scale, yIdx*OFFSET+scale)
+                yield (pyrLevel, xMin, yMin, xMax, yMax, img[yMin:yMax, xMin:xMax])
 
 def calibrateCoordinates(coords, calibPredictions):
     calibTransformations = CALIB_PATTERNS_ARR[np.argmax(calibPredictions, axis=1)]
@@ -66,43 +88,56 @@ PATHS = []
 NORMALIZERS = []
 THRESHOLDS = (NET_12_THRESH, NET_24_THRESH, NET_48_THRESH)
 
-for stageIdx in np.arange(1):
+for stageIdx in np.arange(2):
     PATHS.append((OBJECT_DATABASE_PATHS[stageIdx], NEGATIVE_DATABASE_PATHS[stageIdx]))
     NORMALIZERS.append(tuple((ImageNormalizer(PATHS[stageIdx][0], PATHS[stageIdx][1], MODELS[stageIdx][isCalib].getNormalizationMethod()) for isCalib in (0, 1))))
 
 def detectMultiscale(img, maxStageIdx=len(SCALES)-1, minFaceScale = MIN_FACE_SCALE):
+    classifierInputs = []
+    calibratorInputs = []
+
     for stageIdx in np.arange(0, maxStageIdx + 1):
         curScale = SCALES[stageIdx][0]
-        classifierInputs = []
-        calibratorInputs = []
 
         if stageIdx == 0:
             detectionWindowGenerator = getDetectionWindows(img, curScale)
             totalNumDetectionWindows = next(detectionWindowGenerator)
             detectionWindows = np.zeros((totalNumDetectionWindows, curScale, curScale, 3))
             coords = np.zeros((totalNumDetectionWindows, 4))
+            pyrIdxs = []
+            prevPyrLevel = 0
 
-            for i, (xMin, yMin, xMax, yMax, detectionWindow) in enumerate(detectionWindowGenerator):
+            for i, (pyrLevel, xMin, yMin, xMax, yMax, detectionWindow) in enumerate(detectionWindowGenerator):
                 detectionWindows[i] = detectionWindow
                 coords[i] = (xMin, yMin, xMax, yMax)
+                coords[i] *= PYRAMID_DOWNSCALE ** pyrLevel
 
+                if pyrLevel != prevPyrLevel:
+                    prevPyrLevel = pyrLevel
+                    pyrIdxs.append(i)
+            
+            pyrIdxs.append(len(detectionWindows))
             coords *= minFaceScale/curScale
         else:
             for i in np.arange(0, stageIdx):
                 classifierInputs[i] = classifierInputs[i][posDetectionIndices][picked]
-
+        
         classifierNormalizer, calibNormalizer = NORMALIZERS[stageIdx]
         classifier, calibrator = MODELS[stageIdx]
 
         detectionWindows = detectionWindows if stageIdx == 0 else getNetworkInputs(img, curScale, coords).astype(np.float)
-        classifierInputs.append(classifierNormalizer.preprocess(detectionWindows))
+        classifierInputs.insert(0, classifierNormalizer.preprocess(detectionWindows))
         predictions = classifier.predict(classifierInputs)[:,1]
         posDetectionIndices = np.where(predictions>=THRESHOLDS[stageIdx])
 
         calibratorInputs = [calibNormalizer.preprocess(detectionWindows[posDetectionIndices])]
         calibPredictions = calibrator.predict(calibratorInputs)
         coords = calibrateCoordinates(coords[posDetectionIndices], calibPredictions)
-        coords, picked = nms(coords, predictions[posDetectionIndices])
+
+        if stageIdx == len(SCALES)-1:
+            coords, picked = nms(coords, predictions[posDetectionIndices])
+        else:
+            coords, picked, pyrIdxs = local_nms(coords, predictions[posDetectionIndices], pyrIdxs)
         
         if stageIdx == maxStageIdx:
             return coords.astype(np.int32, copy=False)

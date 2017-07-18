@@ -225,7 +225,7 @@ class DatasetManager():
                 createPositiveDataset(self.stageIdx, **kwargs)
             elif fileName in  NEGATIVE_DATABASE_PATHS:
                 (createNegativeDataset if self.stageIdx == 0 else mineNegatives)(self.stageIdx, **kwargs)
-            elif fileName in CALIBRATION_DATABASE_PATHS:
+            elif fileName in CALIBRATION_DATABASE_PATHS.values():
                 createCalibrationDataset(self.stageIdx, **kwargs)
 
     def getPosDatasetFilePath(self):
