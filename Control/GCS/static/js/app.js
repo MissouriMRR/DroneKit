@@ -34,7 +34,7 @@ new Vue({
       app = this;
 
       now = new Date();
-      seconds_elapsed = Math.round(now - app.time_since_last_update / 1000) % 61;
+      seconds_elapsed = Math.round(now - app.time_since_last_update / 1000) % 60;
 
       if(app.time_since_last_update != null && seconds_elapsed >= app.HEARBEAT_TIMEOUT_SECONDS)
       {
@@ -119,9 +119,13 @@ new Vue({
     socket.on('status', function(data) {
       app.loading_message = "Updating vehicle status...";
       app.vehicle_data = data;
+      app.vehicle_data.uptime_moment = moment.utc(data.uptime);
       app.time_since_last_update = new Date(app.vehicle_data.hearbeat);
 
+      // console.log(app.vehicle_data.uptime_moment)
+
       app.calculateTimeDelta();
+      
 
         if(information_view.style.display == "none")
         {

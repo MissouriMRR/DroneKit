@@ -1,6 +1,9 @@
 - name: Sentinel
   battery:
     full_voltage: 18.00
+    failsafe_voltage: 10.5
 - name: Bebop
   battery:
-    full_voltage: 12.20
+    full_voltage: 12.30
+    failsafe_voltage: 10.5
+    
