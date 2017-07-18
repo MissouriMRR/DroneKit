@@ -34,7 +34,6 @@ class Service():
 	def __exit__(self):
 		pyrs.stop()
 
-
 class Device():
 	def __init__(self, params):
 		self.params = params

@@ -12,6 +12,9 @@ GREEN = (0, 255, 0)
 THICKNESS = 3
 
 if __name__ == '__main__':
+    from .data import DatasetManager
+    from .model import MODELS
+
     parser = OptionParser()
     parser.add_option('-s', '--stage', dest='stageIdx', help='Cascade stage index', metavar = '[0-2]', default = 2)
     parser.add_option('-c', '--calib', action='store_true', dest = 'trainCalib', help='Use to train the calibration net for the given stage', default = False)
@@ -21,6 +24,10 @@ if __name__ == '__main__':
     parser.add_option('-t', '--train', action='store_true', dest='trainMode', help='Train either the classifier or calibrator for the given stage', default = False)
 
     (options, args) = parser.parse_args()
+
+    if options.trainMode or options.evalMode:
+        model = MODELS[options.trainCalib][int(options.stageIdx)]
+        datasetManager = DatasetManager(model)
 
     def predictionCallback(img):
         import cv2
@@ -40,7 +47,7 @@ if __name__ == '__main__':
         visualizer(getTestImagePaths(), predictionCallback, WINDOW_TITLE)
     elif options.trainMode:
         from .train import train
-        train(int(options.stageIdx), options.trainCalib)
+        train(model, datasetManager)
     elif options.liveMode:
         from visualize import cv2Window
         from RealSense import Streamer, LiveDisplay
@@ -50,4 +57,4 @@ if __name__ == '__main__':
             liveStream.run(predictionCallback)
     elif options.evalMode:
         from .eval import plot_precision_recall_vs_threshold
-        plot_precision_recall_vs_threshold(int(options.stageIdx), options.trainCalib)
+        plot_precision_recall_vs_threshold(model, datasetManager)
