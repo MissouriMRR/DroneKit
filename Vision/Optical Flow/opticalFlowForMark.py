@@ -2,33 +2,29 @@
 # Dependencies: OpenCV 3.2, pyrealsnese 2.0, numpy 1.13
 # Execution instructions: Run with Python 3 interpreter
 
+from __future__ import division
+
 import logging
 logging.basicConfig(level = logging.WARN)
 
 import pyrealsense as pyrs
-from pyrealsense import offline
 
-import cv2
+# import cv2
 import numpy as np
 
-from __future__ import division
 
 FPS = 60
-INPUT_WIDTH = 320
-INPUT_HEIGHT = 240
+INPUT_WIDTH = 640
+INPUT_HEIGHT = 480
 REGION_SIZE = 10
 
 cam = None
-depth_intrin = None
 color_intrin = None
 depth_scale = 0
     
 try:
     pyrs.start()
-    stream_settings = {'fps': FPS, 'width': INPUT_WIDTH, 'height': INPUT_HEIGHT}
-    color_stream, depth_stream = (pyrs.ColorStream(**stream_settings), pyrs.DepthStream(**stream_settings))
-    cam = pyrs.Device(streams = [color_stream, depth_stream])
-    depth_intrin = cam.depth_instrinsics
+    cam = pyrs.Device(device_id=0, streams = [pyrs.stream.ColorStream(fps = 60, width=INPUT_WIDTH, height=INPUT_HEIGHT), pyrs.stream.DepthStream(fps = 60, width=INPUT_WIDTH, height=INPUT_HEIGHT)])
     depth_scale = cam.depth_scale
     color_intrin = cam.color_intrinsics
 
@@ -50,11 +46,11 @@ try:
     while(True):
         cam.wait_for_frames()
         print('Average depth:', get_average_depth())
-        cv2.imshow('color', cam.color)
-        cv2.imshow('depth', cam.depth)
-        cv2.waitKey(1)
+        # cv2.imshow('color', cam.color)
+        # cv2.imshow('depth', cam.depth)
+        # cv2.waitKey(1)
 
-finally:
+except KeyboardInterrupt:
     pyrs.stop()
     if cam is not None:
         cam.stop()
