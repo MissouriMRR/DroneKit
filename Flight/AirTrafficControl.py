@@ -23,6 +23,7 @@ import os
 import time
 import threading
 import serial
+import RangeFinder
 
 class DroneAttitude():
 
@@ -131,6 +132,8 @@ class Tower(object):
       self.vehicle.mode = dronekit.VehicleMode("STABILIZE")
       self.STATE = VehicleStates.landed
       self.vehicle_initialized = True
+      self.realsense_range_finder = RangeFinder.RealSenseRangeFinder()
+      self.realsense_range_finder.enabled = True
       self.failsafes = FailsafeController(self)
       self.failsafes.start()
       self.start_time = time.time()
@@ -457,7 +460,7 @@ class FailsafeController(threading.Thread):
   def run(self):
     while not self.stoprequest.isSet():
       if self.atc.STATE == VehicleStates.hover or self.atc.STATE == VehicleStates.flying:
-        self.atc.checkGimbal()
+        # self.atc.checkGimbal()
         self.atc.check_sonar_sensors()
         self.atc.check_battery_voltage()
         sleep(self.atc.FAILSAFES_SLEEP_TIME)
@@ -466,6 +469,7 @@ class FailsafeController(threading.Thread):
     if self.atc.vehicle.armed:
       if self.atc.STATE != VehicleStates.landed:
         self.atc.land()
+        self.atc.realsense_range_finder.enabled = False
 
     self.stoprequest.set()
     # GPIO.cleanup()
