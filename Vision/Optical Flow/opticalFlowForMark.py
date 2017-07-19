@@ -11,6 +11,8 @@ from pyrealsense import offline
 import cv2
 import numpy as np
 
+from __future__ import division
+
 FPS = 60
 INPUT_WIDTH = 320
 INPUT_HEIGHT = 240
@@ -22,6 +24,7 @@ color_intrin = None
 depth_scale = 0
     
 try:
+    pyrs.start()
     stream_settings = {'fps': FPS, 'width': INPUT_WIDTH, 'height': INPUT_HEIGHT}
     color_stream, depth_stream = (pyrs.ColorStream(**stream_settings), pyrs.DepthStream(**stream_settings))
     cam = pyrs.Device(streams = [color_stream, depth_stream])
@@ -37,8 +40,9 @@ try:
       region_end = center_pixel + REGION_SIZE // 2
       region_area = REGION_SIZE ** 2
       depth_image_area = np.prod(depth_image.shape[:2])
-      X = (np.arange(depth_image_area) % depth_image.shape[1]).reshape(*depth_image.shape[:2])
-      Y = (np.arange(depth_image_area) % depth_image.shape[0]).reshape(*depth_image.shape[-2::-1]).transpose()
+      depth_w, depth_h = (depth_image.shape[:2])
+      X = (np.arange(depth_image_area) % depth_image.shape[1]).reshape(depth_w, depth_h)
+      Y = (np.arange(depth_image_area) % depth_image.shape[0]).reshape(depth_h, depth_w).transpose()
       
       average_depth = np.sum(((Y * depth_image + X)*depth_scale)[region_start[0]:region_end[0], region_start[1]:region_end[1]])/region_area
       return average_depth
