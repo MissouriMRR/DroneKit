@@ -2,6 +2,7 @@ from __future__ import absolute_import, division, print_function, unicode_litera
 
 import cv2
 import numpy as np
+import os
 
 from .model import MODELS
 
@@ -9,14 +10,14 @@ from .data import numDetectionWindowsAlongAxis, squashCoords, MIN_FACE_SCALE, OF
 from .preprocess import ImageNormalizer
 
 IOU_THRESH = .5
-NET_12_THRESH = .0032
-NET_24_THRESH = .03
-NET_48_THRESH = .5
+NET_12_THRESH = .33
+NET_24_THRESH = .28
+NET_48_THRESH = .14
 
 GOLDEN_RATIO = (1+5**.5)/2
 
-NUM_PYRAMID_LEVELS = 10
-PYRAMID_DOWNSCALE = 1.18
+NUM_PYRAMID_LEVELS = 5
+PYRAMID_DOWNSCALE = 1.25
 
 def IoU(boxes, box, area=None):
     int_x1, int_y1, int_x2, int_y2 = ((np.maximum if i < 2 else np.minimum)(boxes[:, i], box[i]) for i in np.arange(boxes.shape[1]))
@@ -88,9 +89,10 @@ PATHS = []
 NORMALIZERS = []
 THRESHOLDS = (NET_12_THRESH, NET_24_THRESH, NET_48_THRESH)
 
-for stageIdx in np.arange(2):
-    PATHS.append((OBJECT_DATABASE_PATHS[stageIdx], NEGATIVE_DATABASE_PATHS[stageIdx]))
-    NORMALIZERS.append(tuple((ImageNormalizer(PATHS[stageIdx][0], PATHS[stageIdx][1], MODELS[stageIdx][isCalib].getNormalizationMethod()) for isCalib in (0, 1))))
+for stageIdx in np.arange(len(SCALES)):
+    if os.path.isfile(OBJECT_DATABASE_PATHS[stageIdx]) and os.path.isfile(NEGATIVE_DATABASE_PATHS[stageIdx]):
+        PATHS.append((OBJECT_DATABASE_PATHS[stageIdx], NEGATIVE_DATABASE_PATHS[stageIdx]))
+        NORMALIZERS.append(tuple((ImageNormalizer(PATHS[stageIdx][0], PATHS[stageIdx][1], MODELS[stageIdx][isCalib].getNormalizationMethod()) for isCalib in (0, 1))))
 
 def detectMultiscale(img, maxStageIdx=len(SCALES)-1, minFaceScale = MIN_FACE_SCALE):
     classifierInputs = []
@@ -126,7 +128,7 @@ def detectMultiscale(img, maxStageIdx=len(SCALES)-1, minFaceScale = MIN_FACE_SCA
         classifier, calibrator = MODELS[stageIdx]
 
         detectionWindows = detectionWindows if stageIdx == 0 else getNetworkInputs(img, curScale, coords).astype(np.float)
-        classifierInputs.insert(0, classifierNormalizer.preprocess(detectionWindows))
+        classifierInputs.insert(0 if stageIdx < 2 else stageIdx, classifierNormalizer.preprocess(detectionWindows))
         predictions = classifier.predict(classifierInputs)[:,1]
         posDetectionIndices = np.where(predictions>=THRESHOLDS[stageIdx])
 
@@ -135,7 +137,7 @@ def detectMultiscale(img, maxStageIdx=len(SCALES)-1, minFaceScale = MIN_FACE_SCA
         coords = calibrateCoordinates(coords[posDetectionIndices], calibPredictions)
 
         if stageIdx == len(SCALES)-1:
-            coords, picked = nms(coords, predictions[posDetectionIndices])
+            coords, picked = nms(coords, predictions[posDetectionIndices], iouThresh = .3)
         else:
             coords, picked, pyrIdxs = local_nms(coords, predictions[posDetectionIndices], pyrIdxs)
         

@@ -271,8 +271,7 @@ class ObjectClassifier():
                 
                 y = np.vstack((y, predictions))
         else:
-            X.append(0)
-            y = makePrediction(X)
+            y = makePrediction(X + [0])
         
         return y
 
