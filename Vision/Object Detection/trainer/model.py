@@ -61,15 +61,6 @@ def _convert(data):
 
 @six.add_metaclass(abc.ABCMeta)
 class ObjectClassifier():
-    PARAM_SPACE = {
-        'dropout0': hp.uniform(0, .75),
-        'dropout1': hp.uniform(0, .75),
-        'lr': hp.loguniform(1e-4, .3),
-        'batchSize': hp.choice(32, 64, 128, 256),
-        'norm':  hp.choice(ImageNormalizer.STANDARD_NORMALIZATION, ImageNormalizer.MIN_MAX_SCALING),
-        'flip': hp.choice(None, ImageNormalizer.FLIP_HORIZONTAL)
-    }
-
     DEFAULT_DROPOUT = .3
     LOSS = 'binary_crossentropy'
     METRICS = ['accuracy']
@@ -281,15 +272,6 @@ class ObjectClassifier():
 
 @six.add_metaclass(abc.ABCMeta)
 class ObjectCalibrator(ObjectClassifier):
-    PARAM_SPACE = {
-        'dropout0': hp.uniform(0, .75),
-        'dropout1': hp.uniform(0, .75),
-        'lr': hp.loguniform(1e-9, 1),
-        'batchSize': hp.choice(32, 64, 128, 256),
-        'norm':  hp.choice(ImageNormalizer.STANDARD_NORMALIZATION),
-        'flip': hp.choice(None)
-    }
-
     LOSS = 'categorical_crossentropy'
 
     def __init__(self, stageIdx):
@@ -301,6 +283,19 @@ class ObjectCalibrator(ObjectClassifier):
 
 
 class StageOneClassifier(ObjectClassifier):
+    HP = HyperoptWrapper()
+    PARAM_SPACE = {
+        'dropout0': HP.uniform(0, .75),
+        'dropout1': HP.uniform(0, .75),
+        'lr': HP.loguniform(1e-4, 1),
+        'batchSize': HP.choice(512),
+        'norm':  HP.choice(ImageNormalizer.STANDARD_NORMALIZATION),
+        'flip': HP.choice(ImageNormalizer.FLIP_HORIZONTAL),
+        'momentum': HP.choice(.9),
+        'decay': HP.choice(1e-4),
+        'nesterov': HP.choice(True)
+    }
+
     def __init__(self):
         self.stageIdx = 0
         super(StageOneClassifier, self).__init__(self.stageIdx)
@@ -325,16 +320,17 @@ class StageOneClassifier(ObjectClassifier):
         return self.model
 
 class StageTwoClassifier(ObjectClassifier):
+    HP = HyperoptWrapper()
     PARAM_SPACE = {
-        'dropout0': hp.uniform(0, .75),
-        'dropout1': hp.uniform(0, .75),
-        'lr': hp.loguniform(1e-9, 3),
-        'batchSize': hp.choice(512),
-        'norm':  hp.choice(ImageNormalizer.STANDARD_NORMALIZATION),
-        'flip': hp.choice(ImageNormalizer.FLIP_HORIZONTAL),
-        'momentum': hp.choice(.9),
-        'decay': hp.choice(1e-4),
-        'nesterov': hp.choice(True)
+        'dropout0': HP.uniform(0, .75),
+        'dropout1': HP.uniform(0, .75),
+        'lr': HP.loguniform(1e-4, 1),
+        'batchSize': HP.choice(512),
+        'norm':  HP.choice(ImageNormalizer.STANDARD_NORMALIZATION),
+        'flip': HP.choice(ImageNormalizer.FLIP_HORIZONTAL),
+        'momentum': HP.choice(.9),
+        'decay': HP.choice(1e-4),
+        'nesterov': HP.choice(True)
     }
 
     def __init__(self):
@@ -433,6 +429,19 @@ class StageThreeClassifier(ObjectClassifier):
         return self.model
 
 class StageOneCalibrator(ObjectCalibrator):
+    HP = HyperoptWrapper()
+    PARAM_SPACE = {
+        'dropout0': HP.uniform(0, .75),
+        'dropout1': HP.uniform(0, .75),
+        'lr': HP.loguniform(1e-4, 1),
+        'batchSize': HP.choice(512),
+        'norm':  HP.choice(ImageNormalizer.STANDARD_NORMALIZATION),
+        'flip': HP.choice(None),
+        'momentum': HP.choice(.9),
+        'decay': HP.choice(1e-4),
+        'nesterov': HP.choice(True)
+    }
+
     def __init__(self):
         self.stageIdx = 0
         super(StageOneCalibrator, self).__init__(self.stageIdx)
@@ -453,16 +462,17 @@ class StageOneCalibrator(ObjectCalibrator):
         return self.model
 
 class StageTwoCalibrator(ObjectCalibrator):
+    HP = HyperoptWrapper()
     PARAM_SPACE = {
-        'dropout0': hp.uniform(0, .75),
-        'dropout1': hp.uniform(0, .75),
-        'lr': hp.loguniform(1e-4, 1),
-        'batchSize': hp.choice(512),
-        'norm':  hp.choice(ImageNormalizer.STANDARD_NORMALIZATION),
-        'flip': hp.choice(None),
-        'momentum': hp.choice(.9),
-        'decay': hp.choice(1e-4),
-        'nesterov': hp.choice(True)
+        'dropout0': HP.uniform(0, .75),
+        'dropout1': HP.uniform(0, .75),
+        'lr': HP.loguniform(1e-4, 1),
+        'batchSize': HP.choice(512),
+        'norm':  HP.choice(ImageNormalizer.STANDARD_NORMALIZATION),
+        'flip': HP.choice(None),
+        'momentum': HP.choice(.9),
+        'decay': HP.choice(1e-4),
+        'nesterov': HP.choice(True)
     }
 
     def __init__(self):

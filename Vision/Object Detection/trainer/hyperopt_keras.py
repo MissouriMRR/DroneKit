@@ -8,9 +8,9 @@ import atexit
 
 from hyperopt import hp, fmin, tpe, STATUS_OK, STATUS_FAIL, Trials, space_eval
 
-DEFAULT_NUM_FOLDS = 3
-DEFAULT_NUM_EPOCHS = 50
-DEFAULT_NUM_EVALS = 30
+DEFAULT_NUM_FOLDS = 5
+DEFAULT_NUM_EPOCHS = 30
+DEFAULT_NUM_EVALS = 20
 
 WEIGHTS_FILE_NAME = 'tune.hdf'
 
