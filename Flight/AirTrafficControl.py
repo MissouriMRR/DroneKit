@@ -97,19 +97,20 @@ class Tower(object):
   ACCEL_NOISE_THRESHOLD = 0.05
   MAX_ANGLE_ALL_AXIS = 15.0
   BATTERY_FAILSAFE_VOLTAGE = 9.25
-  FAILSAFES_SLEEP_TIME = 0.1
   STANDARD_SLEEP_TIME = 1
   STANDARD_MATCH_ALTITUDE = 1.5
   MAV_FRAME_LOCAL_NED = 1
   MIN_REALSENSE_DISTANCE_CM = 30
   MAX_REALSENSE_DISTANCE_CM = 500
   MAV_SENSOR_ROTATION_PITCH_270 = 25
+  MAV_RANGEFINDER = 10
 
   def __init__(self):
     self.start_time = 0
     self.flight_log = None
     self.vehicle_initialized = False
     self.vehicle = None
+    self.realsense_range_finder = None
     self.LAST_ATTITUDE = StandardAttitudes.level
     self.LAST_THRUST = StandardThrusts.none
     self.STATE = VehicleStates.unknown
@@ -141,6 +142,7 @@ class Tower(object):
       if(enable_realsense):
         self.realsense_range_finder = RealSense.RangeFinder()
         self.realsense_range_finder.initialize_camera()
+        self.vehicle.parameters['RNGFND_TYPE'] = self.MAV_RANGEFINDER
       self.failsafes = FailsafeController(self)
       self.failsafes.start()
       self.start_time = time.time()
@@ -283,7 +285,7 @@ class Tower(object):
 
   def send_distance_message(self):
 
-    distance = self.realsense_range_finder.get_distance_data()
+    distance = self.realsense_range_finder.get_average_depth()
 
     msg = self.vehicle.message_factory.distance_sensor_encode(
         0,                                             # time since system boot, not used
@@ -435,7 +437,7 @@ class Tower(object):
 
     self.fly_for_time(1, StandardAttitudes.forward, self.vehicle.airspeed, True)
 
-  def checkGimbal(self):
+  def check_gimbal_angle(self):
       degYaw = int(math.degrees(self.vehicle.attitude.yaw))
       degPitch = int(math.degrees(self.vehicle.attitude.pitch))
       degRoll = int(math.degrees(self.vehicle.attitude.roll))
@@ -478,12 +480,11 @@ class FailsafeController(threading.Thread):
   def run(self):
     while not self.stoprequest.isSet():
       if self.atc.STATE == VehicleStates.hover or self.atc.STATE == VehicleStates.flying:
-        # self.atc.checkGimbal()
-        self.atc.check_sonar_sensors()
+        # self.atc.check_gimbal_angle()
+        # self.atc.check_sonar_sensors()
         self.atc.check_battery_voltage()
-        if(self.atc.realsense_range_finder != None):
-          self.atc.send_distance_message()
-        sleep(self.atc.FAILSAFES_SLEEP_TIME)
+      if(self.atc.realsense_range_finder != None):
+        self.atc.send_distance_message()
 
   def join(self, timeout=None):
     if self.atc.vehicle.armed:
@@ -491,7 +492,6 @@ class FailsafeController(threading.Thread):
         self.atc.land()
         if(self.atc.realsense_range_finder != None):
           self.atc.realsense_range_finder.shutdown()
-
     self.stoprequest.set()
     # GPIO.cleanup()
     super(FailsafeController, self).join(timeout)

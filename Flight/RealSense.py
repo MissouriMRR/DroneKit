@@ -3,14 +3,12 @@
 # Execution instructions: Run with Python 3 interpreter
 
 from __future__ import division
-
-import logging
-logging.basicConfig(level = logging.WARN)
+from sys import stdout
 
 import pyrealsense as pyrs
-
-# import cv2
+import logging
 import numpy as np
+
 
 class RangeFinder():
     FPS = 60
@@ -21,13 +19,20 @@ class RangeFinder():
     def __init__(self):
         cam = None
         depth_scale = 0
+        logging.basicConfig(level = logging.WARN)
 
     def initialize_camera(self):
-        pyrs.start()
-        self.cam = pyrs.Device(device_id=0, streams = [pyrs.stream.ColorStream(fps = 60, width=self.INPUT_WIDTH, height=self.INPUT_HEIGHT), pyrs.stream.DepthStream(fps = 60, width=self.INPUT_WIDTH, height=self.INPUT_HEIGHT)])
-        self.depth_scale = self.cam.depth_scale
+        try:
+            pyrs.start()
+            self.cam = pyrs.Device(device_id=0, streams = [pyrs.stream.ColorStream(fps = 60, width=self.INPUT_WIDTH, height=self.INPUT_HEIGHT), pyrs.stream.DepthStream(fps = 60, width=self.INPUT_WIDTH, height=self.INPUT_HEIGHT)])
+            self.depth_scale = self.cam.depth_scale
+        except pyrs.utils.RealsenseError as ex:
+            stdout.write("\nFailed to initialize RealSense.\n")
+            stdout.write(ex)
+            stdout.flush()
 
     def get_average_depth(self):
+        self.cam.wait_for_frames()
         color_image, depth_image = (self.cam.color, self.cam.depth)
 
         center_pixel = np.array(list(depth_image.shape[:2])) // 2
@@ -41,10 +46,6 @@ class RangeFinder():
         
         average_depth = np.sum(((Y * depth_image + X)*self.depth_scale)[region_start[0]:region_end[0], region_start[1]:region_end[1]])/region_area
         return average_depth
-
-    def get_distance_data(self):
-        self.cam.wait_for_frames()
-        return self.get_average_depth()
 
     def send_frame_to_ground(self):
         pass
