@@ -100,3 +100,4 @@ ENV/
 
 #Ignore dataset files
 /Vision/Object Detection/data/*.hdf
+Flight/Tests

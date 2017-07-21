@@ -23,7 +23,7 @@ import os
 import time
 import threading
 import serial
-import RangeFinder
+import RealSense
 
 class DroneAttitude():
 
@@ -81,9 +81,10 @@ class VehicleStates(object):
   landed = "LANDED"
 
 class Tower(object):
-  SIMULATOR = "127.0.0.1:14551"
+  SIMULATOR = "tcp:127.0.0.1:5760"
   USB = "/dev/serial/by-id/usb-3D_Robotics_PX4_FMU_v2.x_0-if00"
   USB_DEV = "/dev/cu.usbmodem1"
+  BEBOP = "tcp:192.168.42.1:14550"
   STANDARD_ATTITUDE_BIT_FLAGS = 0b00111111
   FLIP_ATTITUDE_BIT_FLAGS = 0b00111000
   STANDARD_THRUST_CHANGE = 0.05
@@ -98,6 +99,11 @@ class Tower(object):
   BATTERY_FAILSAFE_VOLTAGE = 9.25
   FAILSAFES_SLEEP_TIME = 0.1
   STANDARD_SLEEP_TIME = 1
+  STANDARD_MATCH_ALTITUDE = 1.5
+  MAV_FRAME_LOCAL_NED = 1
+  MIN_REALSENSE_DISTANCE_CM = 30
+  MAX_REALSENSE_DISTANCE_CM = 500
+  MAV_SENSOR_ROTATION_PITCH_270 = 25
 
   def __init__(self):
     self.start_time = 0
@@ -108,7 +114,7 @@ class Tower(object):
     self.LAST_THRUST = StandardThrusts.none
     self.STATE = VehicleStates.unknown
 
-  def initialize(self, should_write_to_file=False):
+  def initialize(self, should_write_to_file=False, enable_realsense=False):
     """
     @purpose: Connect to the flight controller, start the failsafe
               thread, switch to GUIDED_NOGPS, and open a file to
@@ -123,7 +129,7 @@ class Tower(object):
         sys.stdout = self.flight_log
 
       print("\nConnecting via USB to PixHawk...")
-      self.vehicle = dronekit.connect(self.USB_DEV, wait_ready=True)
+      self.vehicle = dronekit.connect(self.BEBOP, wait_ready=True)
 
       if not self.vehicle:
         print("\nUnable to connect to vehicle.")
@@ -132,13 +138,14 @@ class Tower(object):
       self.vehicle.mode = dronekit.VehicleMode("STABILIZE")
       self.STATE = VehicleStates.landed
       self.vehicle_initialized = True
-      self.realsense_range_finder = RangeFinder.RealSenseRangeFinder()
-      self.realsense_range_finder.enabled = True
+      if(enable_realsense):
+        self.realsense_range_finder = RealSense.RangeFinder()
+        self.realsense_range_finder.initialize_camera()
       self.failsafes = FailsafeController(self)
       self.failsafes.start()
       self.start_time = time.time()
 
-      self.switch_control()
+      # self.switch_control()
 
       print("\nSuccessfully connected to vehicle.")
 
@@ -150,7 +157,8 @@ class Tower(object):
     """
     self.failsafes.join()
     self.vehicle.close()
-    self.flight_log.close()
+    if(self.flight_log):
+      self.flight_log.close()
     self.vehicle_initialized = False
     self.start_time = 0
 
@@ -174,7 +182,7 @@ class Tower(object):
     while(self.vehicle.armed):
       sleep(self.STANDARD_SLEEP_TIME)
 
-  def switch_control(self):
+  def switch_control(self, mode_name="GUIDED_NOGPS"):
     """
     @purpose: Switch the mode to GUIDED_NOGPS and make sure
              that the failsafe thread is running.
@@ -184,9 +192,9 @@ class Tower(object):
     if not self.failsafes:
       self.failsafes = FailsafeController(self)
       self.failsafes.start()
-    if self.vehicle.mode.name != "GUIDED_NOGPS":
-      self.vehicle.mode = dronekit.VehicleMode("GUIDED_NOGPS")
-      while(self.vehicle.mode.name != "GUIDED_NOGPS"):
+    if self.vehicle.mode.name != mode_name:
+      self.vehicle.mode = dronekit.VehicleMode(mode_name)
+      while(self.vehicle.mode.name != mode_name):
         sleep(self.STANDARD_SLEEP_TIME)
 
   def get_uptime(self):
@@ -244,56 +252,50 @@ class Tower(object):
     self.last_attitude = attitude
     self.last_thrust = thrust
 
-#mission one uses the drone, x, y, or z direction, desired speed, distance desired and the height that is wanted   
-#Utilizes "send_ned_velocity()" so this requires an Optical Flow sensor or GPS to be enabled to utilize this command 
+  def side_mission_one(self):
 
-  def mission1(self,distance,height):
-    self.STATE = VehicleStates.takeoff
+    self.takeoff(self.STANDARD_MATCH_ALTITUDE)
 
-    self.arm_drone()
-    self.switch_control()
+    self.switch_control("GUIDED")
+    
+    self.send_ned_velocity(0, 2, 0)
 
-    initial_alt = self.vehicle.location.global_relative_frame.alt
+    sleep(5)
 
-    while((self.vehicle.location.global_relative_frame.alt - initial_alt) < height):
-      self.set_angle_thrust(StandardAttitudes.level, StandardThrusts.takeoff)
-      sleep(self.STANDARD_SLEEP_TIME)
+    self.send_ned_velocity(0, 0, 0)
 
-    print('Reached target altitude:{0:.2f}m'.format(self.vehicle.location.global_relative_frame.alt))
-    #utilizes desired direction that was input to move
-    self.vehicle.mode = dronekit.VehicleMode("GUIDED_NoGPS")
-    #for X axis
-    initial_lat = self.vehicle.location.global_relative_frame.lat
-    #for Y axis
-    initial_lon = self.vehicle.location.global_relative_frame.lon
-    while((self.vehicle.location.global_relative_frame.lon - initial_lon) < distance):
-      self.set_angle_thrust(StandardAttitudes.forward, StandardThrusts.hover)
-    print "Reached target distance. \nNow Landing!"
     self.land()
 
-
-# #Mavlink message that uses duration and velocity in needed to direction to travel
-# #requires an Optical Flow sensor or GPS to be enabled to utilize this command     
-#   def send_ned_velocity(velocity_x, velocity_y, velocity_z, duration):
-#       """
-#       Move vehicle in direction based on specified velocity vectors.
-#       """
-#       msg = vehicle.message_factory.set_position_target_local_ned_encode(
-#           0,       # time_boot_ms (not used)
-#           0, 0,    # target system, target component
-#           mavutil.mavlink.MAV_FRAME_LOCAL_NED, # frame
-#           0b0000111111000111, # type_mask (only speeds enabled)
-#           1, 1, 1, # x, y, z positions
-#           velocity_x, velocity_y, velocity_z, # x, y, z velocity in m/s
-#           0, 0, 0, # x, y, z acceleration (not supported yet, ignored in GCS_Mavlink)
-#           0, 0)    # yaw, yaw_rate (not supported yet, ignored in GCS_Mavlink)
+  def send_ned_velocity(self, velocity_x, velocity_y, velocity_z):
+      """
+      Move vehicle in direction based on specified velocity vectors.
+      """
+      msg = self.vehicle.message_factory.set_position_target_local_ned_encode(
+          0,                                    # time_boot_ms (not used)
+          0, 0,                                 # target system, target component
+          self.MAV_FRAME_LOCAL_NED,             # frame
+          0b0000111111000111,                   # type_mask (only speeds enabled)
+          1, 1, 1,                              # x, y, z positions
+          velocity_x, velocity_y, velocity_z,   # x, y, z velocity in m/s
+          0, 0, 0,                              # x, y, z acceleration (not supported yet, ignored in GCS_Mavlink)
+          0, 0)                                 # yaw, yaw_rate (not supported yet, ignored in GCS_Mavlink)
 
 
-#       # send command to vehicle on 1 Hz cycle
-#       for x in range(0,duration):
-#           vehicle.send_mavlink(msg)
-#           time.sleep(1)
+  def send_distance_message(self):
 
+    distance = self.realsense_range_finder.get_distance_data()
+
+    msg = self.vehicle.message_factory.distance_sensor_encode(
+        0,                                             # time since system boot, not used
+        self.MIN_REALSENSE_DISTANCE_CM,                # min distance cm
+        self.MAX_REALSENSE_DISTANCE_CM,                # max distance cm
+        distance,                                      # current distance, must be int
+        0,                                             # type = laser
+        0,                                             # onboard id, not used
+        self.MAV_SENSOR_ROTATION_PITCH_270,            # must be set to MAV_SENSOR_ROTATION_PITCH_270 for                                                 mavlink rangefinder, represents downward facing
+        0                                              # covariance, not used
+    )
+    self.vehicle.send_mavlink(msg)
 
   def hover(self, duration=None):
     self.set_angle_thrust(StandardAttitudes.level, StandardThrusts.hover)
@@ -313,8 +315,24 @@ class Tower(object):
 
     print('Reached target altitude:{0:.2f}m'.format(self.vehicle.location.global_relative_frame.alt))
 
-    self.hover(10)
-    self.land()
+    self.hover()
+
+  def experimental_takeoff(self, target_altitude):
+
+    self.STATE = VehicleStates.takeoff
+
+    self.arm_drone()
+    self.switch_control()
+
+    initial_alt = self.vehicle.location.global_relative_frame.alt
+
+    while((self.vehicle.location.global_relative_frame.alt - initial_alt) < target_altitude):
+      self.set_angle_thrust(StandardAttitudes.level, StandardThrusts.takeoff)
+      sleep(self.STANDARD_SLEEP_TIME)
+
+    print('Reached target altitude:{0:.2f}m'.format(self.vehicle.location.global_relative_frame.alt))
+
+    self.hover()
 
   def fly_for_time(self, duration, direction, target_velocity, should_hover_on_finish):
     end_manuever = datetime.now() + timedelta(seconds=duration)
@@ -463,13 +481,16 @@ class FailsafeController(threading.Thread):
         # self.atc.checkGimbal()
         self.atc.check_sonar_sensors()
         self.atc.check_battery_voltage()
+        if(self.atc.realsense_range_finder != None):
+          self.atc.send_distance_message()
         sleep(self.atc.FAILSAFES_SLEEP_TIME)
 
   def join(self, timeout=None):
     if self.atc.vehicle.armed:
       if self.atc.STATE != VehicleStates.landed:
         self.atc.land()
-        self.atc.realsense_range_finder.enabled = False
+        if(self.atc.realsense_range_finder != None):
+          self.atc.realsense_range_finder.shutdown()
 
     self.stoprequest.set()
     # GPIO.cleanup()
