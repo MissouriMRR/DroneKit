@@ -98,6 +98,7 @@ class Tower(object):
   BATTERY_FAILSAFE_VOLTAGE = 9.25
   FAILSAFES_SLEEP_TIME = 0.1
   STANDARD_SLEEP_TIME = 1
+  scanField = False
 
   def __init__(self):
     self.start_time = 0
@@ -244,8 +245,8 @@ class Tower(object):
     self.last_attitude = attitude
     self.last_thrust = thrust
 
-#mission one uses the drone, x, y, or z direction, desired speed, distance desired and the height that is wanted   
-#Utilizes "send_ned_velocity()" so this requires an Optical Flow sensor or GPS to be enabled to utilize this command 
+#mission one uses the drone, x, y, or z direction, desired speed, distance desired and the height that is wanted
+#Utilizes "send_ned_velocity()" so this requires an Optical Flow sensor or GPS to be enabled to utilize this command
 
   def mission1(self,distance,height):
     self.STATE = VehicleStates.takeoff
@@ -273,7 +274,7 @@ class Tower(object):
 
 
 # #Mavlink message that uses duration and velocity in needed to direction to travel
-# #requires an Optical Flow sensor or GPS to be enabled to utilize this command     
+# #requires an Optical Flow sensor or GPS to be enabled to utilize this command
 #   def send_ned_velocity(velocity_x, velocity_y, velocity_z, duration):
 #       """
 #       Move vehicle in direction based on specified velocity vectors.
@@ -416,6 +417,17 @@ class Tower(object):
       sleep(self.STANDARD_SLEEP_TIME)
 
     self.fly_for_time(1, StandardAttitudes.forward, self.vehicle.airspeed, True)
+
+  def scanMode(self):
+      gimbal = serial.Serial("/dev/ttyS1", 115200, timeout=10)
+      if self.scanField == False:
+          gimbal.write("86 0 ")
+          gimbal.close()
+          self.scanField = True
+      else:
+          gimbal.write("s")
+          gimbal.close()
+          self.scanField = False
 
   def checkGimbal(self):
       degYaw = int(math.degrees(self.vehicle.attitude.yaw))
