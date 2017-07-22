@@ -87,6 +87,7 @@ class Tower(object):
   USB_DEV = "/dev/cu.usbmodem1"
   BEBOP = "tcp:192.168.42.1:14550"
   STANDARD_ATTITUDE_BIT_FLAGS = 0b00111111
+  NED_VELOCITY_BIT_FLAGS = 0b0000111111000111
   FLIP_ATTITUDE_BIT_FLAGS = 0b00111000
   STANDARD_THRUST_CHANGE = 0.05
   MAX_TURN_TIME = 5
@@ -99,10 +100,12 @@ class Tower(object):
   MAX_ANGLE_ALL_AXIS = 15.0
   BATTERY_FAILSAFE_VOLTAGE = 9.25
   STANDARD_SLEEP_TIME = 1
-  STANDARD_MATCH_ALTITUDE = 1.5
+  STANDARD_MATCH_ALTITUDE = 2.0
   MAV_FRAME_LOCAL_NED = 1
   MIN_REALSENSE_DISTANCE_CM = 30
   MAX_REALSENSE_DISTANCE_CM = 1000
+  MIN_LIDAR_DISTANCE = 50
+  MAX_LIDAR_DISTANCE = 40000
   MAV_SENSOR_ROTATION_PITCH_270 = 25
   MAV_RANGEFINDER = 10
 
@@ -111,6 +114,7 @@ class Tower(object):
     self.flight_log = None
     self.vehicle_initialized = False
     self.vehicle = None
+    self.initial_yaw = 0
     self.realsense_range_finder = None
     self.LAST_ATTITUDE = StandardAttitudes.level
     self.LAST_THRUST = StandardThrusts.none
@@ -255,40 +259,48 @@ class Tower(object):
     self.last_attitude = attitude
     self.last_thrust = thrust
 
-  def side_mission_one(self):
+  def smo_guided(self):
 
-    self.takeoff(self.STANDARD_MATCH_ALTITUDE)
+    self.switch_control(mode_name="GUIDED")
+    self.arm_drone()
 
-    self.switch_control("GUIDED")
-    
-    self.send_ned_velocity(0, 2, 0)
+    self.vehicle.simple_takeoff(self.STANDARD_MATCH_ALTITUDE)
 
     sleep(5)
 
-    self.send_ned_velocity(0, 0, 0)
+    self.send_ned_velocity(0.5, 0, -0.1)
+    self.send_ned_velocity(0.5, 0, -0.1)
+    self.send_ned_velocity(0.5, 0, -0.1)
+    self.send_ned_velocity(0.5, 0, -0.1)
+    
+    self.hover()
+
+    sleep(5)
 
     self.land()
 
   def send_ned_velocity(self, velocity_x, velocity_y, velocity_z):
-      """
-      Move vehicle in direction based on specified velocity vectors.
-      """
-      msg = self.vehicle.message_factory.set_position_target_local_ned_encode(
-          0,                                    # time_boot_ms (not used)
-          0, 0,                                 # target system, target component
-          self.MAV_FRAME_LOCAL_NED,             # frame
-          0b0000111111000111,                   # type_mask (only speeds enabled)
-          1, 1, 1,                              # x, y, z positions
-          velocity_x, velocity_y, velocity_z,   # x, y, z velocity in m/s
-          0, 0, 0,                              # x, y, z acceleration (not supported yet, ignored in GCS_Mavlink)
-          0, 0)                                 # yaw, yaw_rate (not supported yet, ignored in GCS_Mavlink)
-
+    """
+    Move vehicle in direction based on specified velocity vectors.
+    """
+    message = self.vehicle.message_factory.set_position_target_local_ned_encode(
+        0,                                    # time_boot_ms (not used)
+        0, 0,                                 # target system, target component
+        self.MAV_FRAME_LOCAL_NED,             # frame
+        self.NED_VELOCITY_BIT_FLAGS,          # type_mask (only speeds enabled)
+        1, 1, 1,                              # x, y, z positions
+        velocity_x, velocity_y, velocity_z,   # x, y, z velocity in m/s
+        0, 0, 0,                              # x, y, z acceleration (not supported yet, ignored in GCS_Mavlink)
+        0, 0)                                 # yaw, yaw_rate (not supported yet, ignored in GCS_Mavlink)
+    self.vehicle.send_mavlink(message)
+    self.vehicle.commands.upload()
+    sleep(0.1)
 
   def send_distance_message(self):
 
     distance = self.realsense_range_finder.get_average_depth()
 
-    msg = self.vehicle.message_factory.distance_sensor_encode(
+    message = self.vehicle.message_factory.distance_sensor_encode(
         0,                                             # time since system boot, not used
         self.MIN_REALSENSE_DISTANCE_CM,                # min distance cm
         self.MAX_REALSENSE_DISTANCE_CM,                # max distance cm
@@ -298,31 +310,36 @@ class Tower(object):
         self.MAV_SENSOR_ROTATION_PITCH_270,            # must be set to MAV_SENSOR_ROTATION_PITCH_270 for                                                 mavlink rangefinder, represents downward facing
         0                                              # covariance, not used
     )
-    self.vehicle.send_mavlink(msg)
+    self.vehicle.send_mavlink(message)
+    self.vehicle.commands.upload()
 
-  def hover(self, duration=None):
-    self.set_angle_thrust(StandardAttitudes.level, StandardThrusts.hover)
+  def send_distance_lidar_message(self):
+
+    distance = None
+    sensor_rotation = None
+
+    message = self.vehicle.message_factory.distance_sensor_encode(
+        0,                                             # time since system boot, not used
+        self.MIN_LIDAR_DISTANCE,                       # min distance cm
+        self.MAX_LIDAR_DISTANCE,                       # max distance cm
+        distance,                                      # current distance, must be int
+        0,                                             # type = laser
+        0,                                             # onboard id, not used
+        sensor_rotation,                               # sensor rotation
+        0                                              # covariance, not used
+    )
+    self.vehicle.send_mavlink(message)
+    self.vehicle.commands.upload()
+
+  def hover(self):
+    self.switch_control("GUIDED")
+    self.send_ned_velocity(0, 0, 0)
 
   def takeoff(self, target_altitude):
 
     self.STATE = VehicleStates.takeoff
 
-    self.arm_drone()
-    self.switch_control()
-
-    initial_alt = self.vehicle.location.global_relative_frame.alt
-
-    while((self.vehicle.location.global_relative_frame.alt - initial_alt) < target_altitude):
-      self.set_angle_thrust(StandardAttitudes.level, StandardThrusts.takeoff)
-      sleep(self.STANDARD_SLEEP_TIME)
-
-    print('Reached target altitude:{0:.2f}m'.format(self.vehicle.location.global_relative_frame.alt))
-
-    self.hover()
-
-  def experimental_takeoff(self, target_altitude):
-
-    self.STATE = VehicleStates.takeoff
+    self.initial_yaw = self.vehicle.attitude.yaw
 
     self.arm_drone()
     self.switch_control()
@@ -330,11 +347,16 @@ class Tower(object):
     initial_alt = self.vehicle.location.global_relative_frame.alt
 
     while((self.vehicle.location.global_relative_frame.alt - initial_alt) < target_altitude):
-      self.set_angle_thrust(StandardAttitudes.level, StandardThrusts.takeoff)
+      self.set_angle_thrust(DroneAttitude(0,0, math.radians(self.initial_yaw)), StandardThrusts.takeoff)
       sleep(self.STANDARD_SLEEP_TIME)
 
     print('Reached target altitude:{0:.2f}m'.format(self.vehicle.location.global_relative_frame.alt))
 
+  def guided_takeoff(self, target_altitude):
+    self.initial_yaw = self.vehicle.attitude.yaw
+    self.switch_control(mode_name="GUIDED")
+    self.arm_drone()
+    self.vehicle.simple_takeoff(target_altitude)
     self.hover()
 
   def fly_for_time(self, duration, direction, target_velocity, should_hover_on_finish):
@@ -382,10 +404,8 @@ class Tower(object):
 
       print(updated_attitude.pitch_deg,)
 
-      sleep(self.STANDARD_SLEEP_TIME)
-
     if(should_hover_on_finish):
-      # self.hover()
+      self.hover()
       pass
 
   def land(self):
@@ -451,21 +471,6 @@ class Tower(object):
       gimbal.write(valChange)
       gimbal.close()
       pass
-
-  def check_sonar_sensors(self):
-    # sonar = Sonar.Sonar(2,3, "Main")
-    # print("%s Measured Distance = %.1f cm" % (sonar.getName(), sonar.getDistance()))
-    # message = vehicle.message.distance_sensor(
-    #     0,
-    #     6,
-    #     200,
-    #     sonar.getDistance(),
-    #     MAV_DISTANCE_SENSOR_ULTRASOUND,
-    #     158,
-    #     180,
-    #     0
-    # )
-    pass
 
   def check_battery_voltage(self):
     if(self.vehicle.battery.voltage < self.BATTERY_FAILSAFE_VOLTAGE):
