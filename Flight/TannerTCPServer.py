@@ -11,10 +11,10 @@ connection, address = serversocket.accept()
 
 data = ""
 
-while data <> 'q' and data <> 'Q':
+while data != 'q' and data != 'Q':
     buf = connection.recv(64)
     if len(buf) > 0:
         print buf
         data = raw_input ( "SEND( TYPE q or Q to Quit):" )
-        if(data <> 'q' and data <> 'Q'):
+        if(data != 'q' and data != 'Q'):
             connection.send(data)

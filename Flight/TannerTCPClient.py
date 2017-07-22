@@ -15,9 +15,9 @@ PORT_NUMBER = 8089
 client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 client_socket.connect(('localhost', PORT_NUMBER))
 data = ""
-while data <> 'Q' and data <> 'q':
+while data != 'Q' and data != 'q':
     data = raw_input ( "SEND( TYPE q or Q to Quit):" )
-    if (data <> 'Q' and data <> 'q'):
+    if (data != 'Q' and data != 'q'):
         client_socket.send(data)
         buf = client_socket.recv(64)
         print buf
