@@ -115,6 +115,7 @@ class Tower(object):
     self.vehicle_initialized = False
     self.vehicle = None
     self.initial_yaw = 0
+    self.scanField = False
     self.realsense_range_finder = None
     self.LAST_ATTITUDE = StandardAttitudes.level
     self.LAST_THRUST = StandardThrusts.none
@@ -260,7 +261,6 @@ class Tower(object):
     self.last_thrust = thrust
 
   def smo_guided(self):
-
     self.switch_control(mode_name="GUIDED")
     self.arm_drone()
 
@@ -297,7 +297,6 @@ class Tower(object):
     sleep(0.1)
 
   def send_distance_message(self):
-
     distance = self.realsense_range_finder.get_average_depth()
 
     message = self.vehicle.message_factory.distance_sensor_encode(
@@ -458,19 +457,16 @@ class Tower(object):
 
     self.fly_for_time(1, StandardAttitudes.forward, self.vehicle.airspeed, True)
 
-  def check_gimbal_angle(self):
-      degYaw = int(math.degrees(self.vehicle.attitude.yaw))
-      degPitch = int(math.degrees(self.vehicle.attitude.pitch))
-      degRoll = int(math.degrees(self.vehicle.attitude.roll))
-      print("\nYaw: {0}".format(degYaw))
-      print("\nPitch: {0}".format(degPitch))
-      print("\nRoll: {0}".format(degRoll))
-      valChange = str(degPitch) + " " + str(degRoll)+ " "
-      print("\n"+valChange)
+  def switch_gimbal_mode(self):
       gimbal = serial.Serial("/dev/ttyS1", 115200, timeout=10)
-      gimbal.write(valChange)
-      gimbal.close()
-      pass
+      if self.scanField == False:
+          gimbal.write("86 0 ")
+          gimbal.close()
+          self.scanField = True
+      else:
+          gimbal.write("s")
+          gimbal.close()
+          self.scanField = False
 
   def check_battery_voltage(self):
     if(self.vehicle.battery.voltage < self.BATTERY_FAILSAFE_VOLTAGE):
