@@ -9,8 +9,12 @@ serversocket.listen(5) # become a server socket, maximum 5 connections
 
 connection, address = serversocket.accept()
 
-while True:
+data = ""
+
+while data <> 'q' and data <> 'Q':
     buf = connection.recv(64)
     if len(buf) > 0:
         print buf
-
+        data = raw_input ( "SEND( TYPE q or Q to Quit):" )
+        if(data <> 'q' and data <> 'Q'):
+            connection.send(data)
