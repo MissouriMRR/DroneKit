@@ -67,6 +67,7 @@ class StandardAttitudes(object):
 
 class StandardThrusts(object):
   none = 0.00
+  low = 0.25
   hover = 0.525
   takeoff = 0.75
   full = 1.00
@@ -101,7 +102,7 @@ class Tower(object):
   STANDARD_MATCH_ALTITUDE = 1.5
   MAV_FRAME_LOCAL_NED = 1
   MIN_REALSENSE_DISTANCE_CM = 30
-  MAX_REALSENSE_DISTANCE_CM = 500
+  MAX_REALSENSE_DISTANCE_CM = 1000
   MAV_SENSOR_ROTATION_PITCH_270 = 25
   MAV_RANGEFINDER = 10
 
@@ -147,7 +148,7 @@ class Tower(object):
       self.failsafes.start()
       self.start_time = time.time()
 
-      # self.switch_control()
+      self.switch_control()
 
       print("\nSuccessfully connected to vehicle.")
 
@@ -224,7 +225,7 @@ class Tower(object):
 
   def set_angle_thrust(self, attitude, thrust):
     """
-    @purpose: Send an specified attitude message to the
+    @purpose: Send a specified attitude message to the
               flight controller. For more information, see
               http://mavlink.org/messages/common#SET_ATTITUDE_TARGET.
     @args:
