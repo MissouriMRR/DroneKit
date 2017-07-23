@@ -123,7 +123,7 @@ class Tower(object):
     self.LAST_THRUST = StandardThrusts.none
     self.STATE = VehicleStates.unknown
 
-  def initialize(self, should_write_to_file=False, enable_realsense=False, enable_LIDAR=False):
+  def initialize(self, should_write_to_file=False, enable_realsense=False, enable_lidar=False):
     """
     @purpose: Connect to the flight controller, start the failsafe
               thread, switch to GUIDED_NOGPS, and open a file to
@@ -138,7 +138,7 @@ class Tower(object):
         sys.stdout = self.flight_log
 
       print("\nConnecting via USB to PixHawk...")
-      self.vehicle = dronekit.connect(self.BEBOP, wait_ready=True)
+      self.vehicle = dronekit.connect(self.USB, wait_ready=True)
 
       if not self.vehicle:
         print("\nUnable to connect to vehicle.")
