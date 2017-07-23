@@ -14,9 +14,7 @@ from os import system
 import sys
 from time import sleep
 from copy import deepcopy
-# from Collision import Sonar
 
-# import RPi.GPIO as GPIO
 import dronekit
 import math
 import os
@@ -67,7 +65,7 @@ class StandardAttitudes(object):
 
 class StandardThrusts(object):
   none = 0.00
-  low = 0.25
+  land = 0.25
   hover = 0.525
   takeoff = 0.75
   full = 1.00
@@ -108,6 +106,7 @@ class Tower(object):
   MAX_LIDAR_DISTANCE = 40000
   MAV_SENSOR_ROTATION_PITCH_270 = 25
   MAV_RANGEFINDER = 10
+  GIMBAL_PORTRAIT = "86 0 "
 
   def __init__(self):
     self.start_time = 0
@@ -423,7 +422,7 @@ class Tower(object):
       self.set_angle_thrust(StandardAttitudes.level, StandardThrusts.land)
 
     self.disarm_drone()
-  f
+
   def do_circle_turn(self, desired_angle, direction, duration):
     if(duration > self.MAX_TURN_TIME):
       return
@@ -469,7 +468,7 @@ class Tower(object):
   def switch_gimbal_mode(self):
       gimbal = serial.Serial("/dev/ttyS1", 115200, timeout=10)
       if self.scanField == False:
-          gimbal.write("86 0 ")
+          gimbal.write(self.GIMBAL_PORTRAIT)
           gimbal.close()
           self.scanField = True
       else:
@@ -491,8 +490,6 @@ class FailsafeController(threading.Thread):
   def run(self):
     while not self.stoprequest.isSet():
       if self.atc.STATE == VehicleStates.hover or self.atc.STATE == VehicleStates.flying:
-        # self.atc.check_gimbal_angle()
-        # self.atc.check_sonar_sensors()
         self.atc.check_battery_voltage()
       if(self.atc.realsense_range_finder != None):
         self.atc.send_distance_message()
@@ -504,5 +501,4 @@ class FailsafeController(threading.Thread):
         if(self.atc.realsense_range_finder != None):
           self.atc.realsense_range_finder.shutdown()
     self.stoprequest.set()
-    # GPIO.cleanup()
     super(FailsafeController, self).join(timeout)
