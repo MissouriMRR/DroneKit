@@ -108,6 +108,7 @@ class Tower(object):
   MAX_LIDAR_DISTANCE = 40000
   MAV_SENSOR_ROTATION_PITCH_270 = 25
   MAV_RANGEFINDER = 10
+  MAV_PERIPHERAL_ID = 195
   GIMBAL_PORTRAIT = "86 0 "
 
   def __init__(self):
@@ -332,7 +333,7 @@ class Tower(object):
         self.MAX_LIDAR_DISTANCE,                       # max distance cm
         distance,                                      # current distance, must be int
         0,                                             # type = laser
-        0,                                             # onboard id, not used
+        self.MAV_PERIPHERAL_ID,                                             # onboard id, not used
         sensor_rotation,                               # sensor rotation
         0                                              # covariance, not used
     )
