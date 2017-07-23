@@ -67,11 +67,8 @@ class StandardAttitudes(object):
 
 class StandardThrusts(object):
   none = 0.00
-<<<<<<< HEAD
   low = 0.25
-=======
   land = 0.25
->>>>>>> 1b25b7703c9cf46c838236c13753d01ff2469e6e
   hover = 0.525
   takeoff = 0.75
   full = 1.00
