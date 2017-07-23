@@ -1,13 +1,55 @@
-# Author(s): Christopher O'Toole
+# Author(s): Christopher O'Toole, Tanner Winkelman
 # Dependencies: OpenCV 3.2, pyrealsnese 2.0, numpy 1.13
 # Execution instructions: Run with Python 3 interpreter
 
 from __future__ import division
 from sys import stdout
+from matplotlib import pyplot as plt
 
 import pyrealsense as pyrs
 import logging
 import numpy as np
+import socket
+import json
+import pickle
+
+# better change this value; I don't know what address to put here
+GROUND_IP = 'localhost'
+
+# needs to be the same on the ground (server) program
+PORT_NUMBER = 8089
+
+
+import socket
+import numpy as np
+from cStringIO import StringIO
+
+class numpysocket():
+    def __init__(self):
+        pass
+
+    @staticmethod
+    def startClient(server_address,image):
+        if not isinstance(image,np.ndarray):
+            print 'not a valid numpy image'
+            return
+        client_socket=socket.socket()
+        port=PORT_NUMBER
+        try:
+            client_socket.connect((server_address, port))
+            print 'Connected to %s on port %s' % (server_address, port)
+        except socket.error,e:
+            print 'Connection to %s on port %s failed: %s' % (server_address, port, e)
+            return
+        f = StringIO()
+        np.savez_compressed(f,frame=image)
+        f.seek(0)
+        out = f.read()
+        client_socket.sendall(out)
+        client_socket.shutdown(1)
+        client_socket.close()
+        print 'image sent'
+        pass
 
 
 class RangeFinder():
@@ -15,11 +57,16 @@ class RangeFinder():
     INPUT_WIDTH = 640
     INPUT_HEIGHT = 480
     REGION_SIZE = 10
+    client_socket = socket.socket( )
 
     def __init__(self):
-        cam = None
-        depth_scale = 0
-        logging.basicConfig(level = logging.WARN)
+        self.cam = None
+        self.depth_scale = 0
+        #self.logging.basicConfig(level = logging.WARN)
+        # added by Tanner
+        #self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        #self.client_socket.connect((GROUND_IP, PORT_NUMBER))
+
 
     def initialize_camera(self):
         try:
@@ -47,8 +94,16 @@ class RangeFinder():
         average_depth = np.sum(((Y * depth_image + X)*self.depth_scale)[region_start[0]:region_end[0], region_start[1]:region_end[1]])/region_area
         return average_depth
 
+    # added by Tanner
     def send_frame_to_ground(self):
-        pass
+        #serialized = pickle.dumps(self.cam.color, protocol=pickle.HIGHEST_PROTOCOL) # protocol 0 is printable ASCII
+        #size = len( serialized )
+        #self.client_socket.send( str(size) )
+        #self.client_socket.send(serialized)
+        self.get_average_depth()
+        numpysocket.startClient(GROUND_IP,self.cam.color)
+        plt.imshow(self.cam.color, interpolation='nearest')
+        plt.show()
 
     def shutdown(self):
         pyrs.stop()
