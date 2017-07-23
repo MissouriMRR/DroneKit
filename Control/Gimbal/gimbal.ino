@@ -142,7 +142,7 @@ void goToAngle(byte pitchAngle, byte rollAngle, int speed)
     for (int i = currentPAngle; i < pitchAngle; i++)
     {
       pitch.write(i);
-      delay(speed);
+      //delay(speed);
     }
   }
   else
@@ -150,7 +150,7 @@ void goToAngle(byte pitchAngle, byte rollAngle, int speed)
     for (int i = currentPAngle; i > pitchAngle; i--)
     {
       pitch.write(i);
-      delay(speed);
+      //delay(speed);
     }
   }
 
@@ -159,7 +159,7 @@ void goToAngle(byte pitchAngle, byte rollAngle, int speed)
     for (int i = currentRAngle; i < rollAngle; i++)
     {
       roll.write(i);
-      delay(speed);
+      //delay(speed);
     }
   }
   else
@@ -167,7 +167,7 @@ void goToAngle(byte pitchAngle, byte rollAngle, int speed)
     for (int i = currentRAngle; i > rollAngle; i--)
     {
       roll.write(i);
-      delay(speed);
+      //delay(speed);
     }
   }
 }
