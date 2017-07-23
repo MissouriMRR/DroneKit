@@ -99,7 +99,7 @@ class ObjectClassifier():
         return weightsFilePath
 
     def getNormalizationMethod(self):
-        return self.bestParams['norm'] if self.wasTuned() else ImageNormalizer.STANDARD_NORMALIZATION
+        return ImageNormalizer.ZCA_WHITENING
 
     def getNormalizationParams(self):
         params = {}
@@ -195,7 +195,7 @@ class ObjectClassifier():
         saveFilePath = saveFilePath or self.getSaveFilePath(debug)
         batchSize = batchSize or self.getBatchSize()
 
-        callbacks = [ModelCheckpoint(saveFilePath, monitor = 'val_loss', save_best_only = True, verbose = int(verbose))]
+        callbacks = [ModelCheckpoint(saveFilePath, monitor = 'loss', save_best_only = True, verbose = int(verbose))]
 
         model = self(*params)
         y_train, y_test = (np_utils.to_categorical(vec, int(np.amax(vec) + 1)) for vec in (y_train, y_test))
@@ -288,7 +288,7 @@ class StageOneClassifier(ObjectClassifier):
         'dropout0': HP.uniform(0, .75),
         'dropout1': HP.uniform(0, .75),
         'lr': HP.loguniform(1e-4, 1),
-        'batchSize': HP.choice(64),
+        'batchSize': HP.choice(512),
         'norm':  HP.choice(ImageNormalizer.STANDARD_NORMALIZATION),
         'flip': HP.choice(ImageNormalizer.FLIP_HORIZONTAL),
         'momentum': HP.choice(.9),
