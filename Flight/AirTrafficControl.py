@@ -427,8 +427,18 @@ class Tower(object):
 
     while((initial_alt - self.vehicle.location.global_relative_frame.alt) > LAND_ALTITUDE):
       self.set_angle_thrust(StandardAttitudes.level, StandardThrusts.land)
-
+    print "Disarming Drone"
     self.disarm_drone()
+
+  def land_guided(self):
+    initial_alt = self.vehicle.location.global_relative_frame.alt 
+    self.switch_control(mode_name="GUIDED")
+
+  while((initial_alt - self.vehicle.location.global_relative_frame.alt) > LAND_ALTITUDE):
+    self.send_ned_velocity(0, 0, 0.3)
+  print "Disarming Drone"
+  self.disarm_drone()
+
 
   def do_circle_turn(self, desired_angle, direction, duration):
     if(duration > self.MAX_TURN_TIME):
