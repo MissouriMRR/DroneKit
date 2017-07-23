@@ -39,7 +39,7 @@ class LIDAR():
         # y = math.sin(angle_rad) * distance
         if distance < self.MAX_SAFE_DISTANCE:
           lidar_data.append([distance, ((angle_deg % 360.0) // self.QUADRANT_SIZE) ])
-	
+
     return lidar_data
 
   def shutdown(self):
