@@ -47,7 +47,7 @@ if __name__ == '__main__':
                     for annotation in curFileAnnotations:
                         top_x, top_y = tuple(annotation[:,0])
                         bottom_x, bottom_y = tuple(annotation[:, 1])
-                        roombas.append((curFilePath, top_x, top_y, np.abs(top_x - bottom_x), np.abs(top_y - bottom_y)))
+                        roombas.append((curFilePath, top_x, top_y, bottom_x - top_x, bottom_y - top_y))
 
         return roombas
 

@@ -10,7 +10,7 @@ from .data import numDetectionWindowsAlongAxis, squashCoords, MIN_OBJECT_SCALE, 
 from .preprocess import ImageNormalizer
 
 IOU_THRESH = .5
-NET_12_THRESH = .001
+NET_12_THRESH = .01
 NET_24_THRESH = .06
 NET_48_THRESH = .3
 
@@ -171,5 +171,5 @@ def fastDetect(img, getDetectionWindows):
     calibPredictions = calibrator.predict(calibratorInputs)
     coords = calibrateCoordinates(coords[posDetectionIndices], calibPredictions)
 
-    coords, picked = nms(coords, predictions[posDetectionIndices])
+    coords, picked = nms(coords, predictions[posDetectionIndices], iouThresh = .1)
     return coords.astype(np.int32, copy=False), np.asarray(centers)[posDetectionIndices][picked]
