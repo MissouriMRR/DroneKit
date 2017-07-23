@@ -4,37 +4,24 @@ import math
 
 from sweeppy import Sweep
 
-
 class LIDAR():
-
-  def __init__(self):
-    self.sweep = None
-    self.enable_scanning = False
   MAX_SAFE_DISTANCE = 300.0
   QUADRANT_SIZE = 45.0
+
   def __init__(self):
     self.lidar_sensor = "/dev/serial/by-id/usb-FTDI_FT230X_Basic_UART_DO00867Q-if00-port0"
     self.sweep = None
+    self.speed = 0
+    self.rate = 0
 
   def connect_to_lidar(self):
     self.sweep.__enter__()
     
-    speed = self.sweep.get_motor_speed()
-    rate = self.sweep.get_sample_rate()
-
-    print('Motor Speed: {} Hz'.format(speed))
-    print('Sample Rate: {} Hz'.format(rate))
-
-  def get_lidar_data(self):
-    # Starts scanning as soon as the motor is ready
-    self.sweep.start_scanning()
-    
-
     self.sweep.set_motor_speed(2)
     self.sweep.set_sample_rate(1000)
 
-    speed = self.sweep.get_motor_speed()
-    rate = self.sweep.get_sample_rate()
+    self.speed = self.sweep.get_motor_speed()
+    self.rate = self.sweep.get_sample_rate()
 
     self.sweep.start_scanning()
 
@@ -44,13 +31,6 @@ class LIDAR():
 
     # get_scans is coroutine-based generator lazily returning scans ad infinitum
     for scan in itertools.islice(self.sweep.get_scans(), 1):
-      pass
-
-    return lidar_data
-    
-  def shutdown(self):
-    self.sweep.__exit__()
-
       for sample in scan.samples:
         distance = sample.distance
         angle_deg = (sample.angle / 1000.0) % 360.0

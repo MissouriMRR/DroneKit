@@ -125,7 +125,6 @@ class Tower(object):
     self.LAST_THRUST = StandardThrusts.none
     self.STATE = VehicleStates.unknown
 
-  def initialize(self, should_write_to_file=False, enable_realsense=False):
   def initialize(self, should_write_to_file=False, enable_realsense=False, enable_lidar=False):
     """
     @purpose: Connect to the flight controller, start the failsafe
@@ -315,65 +314,12 @@ class Tower(object):
         distance,                                      # current distance, must be int
         0,                                             # type = laser
         0,                                             # onboard id, not used
-        self.MAV_SENSOR_ROTATION_PITCH_270,            # must be set to MAV_SENSOR_ROTATION_PITCH_270 for                                                 mavlink rangefinder, represents downward facing
+        self.MAV_SENSOR_ROTATION_PITCH_270,            # must be set to MAV_SENSOR_ROTATION_PITCH_270   
         0                                              # covariance, not used
     )
-    self.vehicle.send_mavlink(message)
-    self.vehicle.commands.upload()
-
-  def send_distance_lidar_message(self):
-
-    distance = None
-    sensor_rotation = None
-
-
-    self.vehicle.simple_takeoff(self.STANDARD_MATCH_ALTITUDE)
-
-    sleep(5)
-
-    self.send_ned_velocity(0.5, 0, -0.1)
-    self.send_ned_velocity(0.5, 0, -0.1)
-    self.send_ned_velocity(0.5, 0, -0.1)
-    self.send_ned_velocity(0.5, 0, -0.1)
-
-    self.hover()
-
-    sleep(5)
-
-    self.land()
-
-  def send_ned_velocity(self, velocity_x, velocity_y, velocity_z):
-    """
-    Move vehicle in direction based on specified velocity vectors.
-    """
-    message = self.vehicle.message_factory.set_position_target_local_ned_encode(
-        0,                                    # time_boot_ms (not used)
-        0, 0,                                 # target system, target component
-        self.MAV_FRAME_LOCAL_NED,             # frame
-        self.NED_VELOCITY_BIT_FLAGS,          # type_mask (only speeds enabled)
-        1, 1, 1,                              # x, y, z positions
-        velocity_x, velocity_y, velocity_z,   # x, y, z velocity in m/s
-        0, 0, 0,                              # x, y, z acceleration (not supported yet, ignored in GCS_Mavlink)
-        0, 0)                                 # yaw, yaw_rate (not supported yet, ignored in GCS_Mavlink)
     self.vehicle.send_mavlink(message)
     self.vehicle.commands.upload()
     sleep(0.1)
-
-  def send_distance_message(self):
-    distance = self.realsense_range_finder.get_average_depth()
-
-    message = self.vehicle.message_factory.distance_sensor_encode(
-        0,                                             # time since system boot, not used
-        self.MIN_REALSENSE_DISTANCE_CM,                # min distance cm
-        self.MAX_REALSENSE_DISTANCE_CM,                # max distance cm
-        distance,                                      # current distance, must be int
-        0,                                             # type = laser
-        0,                                             # onboard id, not used
-        self.MAV_SENSOR_ROTATION_PITCH_270,            # must be set to MAV_SENSOR_ROTATION_PITCH_270 for                                            # mavlink rangefinder, represents downward facing
-        0                                              # covariance, not used
-    )
-    self.vehicle.send_mavlink(message)
-    self.vehicle.commands.upload()
 
   def send_distance_lidar_message(self):
 
@@ -570,11 +516,6 @@ class FailsafeController(threading.Thread):
   def run(self):
     while not self.stoprequest.isSet():
       if self.atc.STATE == VehicleStates.hover or self.atc.STATE == VehicleStates.flying:
-        # self.atc.check_gimbal_angle()
-        # self.atc.check_sonar_sensors()
-        self.atc.check_battery_voltage()
-      if(self.atc.realsense_range_finder != None):
-        self.atc.send_distance_message()
         self.atc.check_battery_voltage()
       if(self.atc.realsense_range_finder != None):
         self.atc.send_distance_message()
@@ -588,9 +529,6 @@ class FailsafeController(threading.Thread):
         self.atc.land()
         if(self.atc.realsense_range_finder != None):
           self.atc.realsense_range_finder.shutdown()
-    self.stoprequest.set()
-    # GPIO.cleanup()
-    super(FailsafeController, self).join(timeout)
         if(self.atc.scanse != None):
           self.atc.scanse.shutdown()
     self.stoprequest.set()
