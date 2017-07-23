@@ -99,7 +99,7 @@ class ObjectClassifier():
         return weightsFilePath
 
     def getNormalizationMethod(self):
-        return ImageNormalizer.ZCA_WHITENING
+        return self.bestParams['norm'] if self.wasTuned() else ImageNormalizer.STANDARD_NORMALIZATION
 
     def getNormalizationParams(self):
         params = {}
@@ -195,7 +195,7 @@ class ObjectClassifier():
         saveFilePath = saveFilePath or self.getSaveFilePath(debug)
         batchSize = batchSize or self.getBatchSize()
 
-        callbacks = [ModelCheckpoint(saveFilePath, monitor = 'loss', save_best_only = True, verbose = int(verbose))]
+        callbacks = [ModelCheckpoint(saveFilePath, monitor = 'val_loss', save_best_only = True, verbose = int(verbose))]
 
         model = self(*params)
         y_train, y_test = (np_utils.to_categorical(vec, int(np.amax(vec) + 1)) for vec in (y_train, y_test))

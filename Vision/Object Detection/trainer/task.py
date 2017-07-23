@@ -52,7 +52,7 @@ if __name__ == '__main__':
         return roombas
 
     def getRoombaProposals(img):
-        THRESHOLD_MIN = 135
+        THRESHOLD_MIN = 130
         THRESHOLD_MAX = 255
         MIN_AREA = 50
 

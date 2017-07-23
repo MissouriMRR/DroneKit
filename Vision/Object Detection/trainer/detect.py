@@ -10,7 +10,7 @@ from .data import numDetectionWindowsAlongAxis, squashCoords, MIN_OBJECT_SCALE, 
 from .preprocess import ImageNormalizer
 
 IOU_THRESH = .5
-NET_12_THRESH = .3
+NET_12_THRESH = .001
 NET_24_THRESH = .06
 NET_48_THRESH = .3
 
@@ -145,7 +145,9 @@ def detectMultiscale(img, maxStageIdx=len(SCALES)-1, minObjectScale = MIN_OBJECT
 def fastDetect(img, getDetectionWindows):
     classifierInputs = []
     calibratorInputs = []
-    curScale = SCALES[0][0]
+
+    stageIdx = 0
+    curScale = SCALES[stageIdx][0]
 
     objectProposals, centers = getDetectionWindows(img)
     totalNumDetectionWindows = len(objectProposals)
@@ -156,17 +158,18 @@ def fastDetect(img, getDetectionWindows):
         xMin, yMin, w, h = squashCoords(img, xMin, yMin, xMax-xMin, yMax-yMin)
         coords[i] = (xMin, yMin, xMin + w, yMin + h)
         detectionWindows[i] = cv2.resize(img[yMin:yMin+h, xMin:xMin+w], (curScale, curScale))
-    
-    classifierNormalizer, calibNormalizer = NORMALIZERS[0]
-    classifier, calibrator = MODELS[0]
 
-    classifierInputs.insert(0, classifierNormalizer.preprocess(detectionWindows))
+    classifierNormalizer, calibNormalizer = NORMALIZERS[stageIdx]
+    classifier, calibrator = MODELS[stageIdx]
+
+    detectionWindows = detectionWindows if stageIdx == 0 else getNetworkInputs(img, curScale, coords).astype(np.float)
+    classifierInputs.insert(0 if stageIdx < 2 else stageIdx, classifierNormalizer.preprocess(detectionWindows))
     predictions = classifier.predict(classifierInputs)[:,1]
-    posDetectionIndices = np.where(predictions>=NET_12_THRESH)
+    posDetectionIndices = np.where(predictions>=THRESHOLDS[stageIdx])
 
     calibratorInputs = [calibNormalizer.preprocess(detectionWindows[posDetectionIndices])]
     calibPredictions = calibrator.predict(calibratorInputs)
     coords = calibrateCoordinates(coords[posDetectionIndices], calibPredictions)
 
-    coords, picked = nms(coords, predictions[posDetectionIndices], iouThresh = .1)
+    coords, picked = nms(coords, predictions[posDetectionIndices])
     return coords.astype(np.int32, copy=False), np.asarray(centers)[posDetectionIndices][picked]
