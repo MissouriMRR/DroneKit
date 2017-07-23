@@ -14,9 +14,8 @@ from os import system
 import sys
 from time import sleep
 from copy import deepcopy
-# from Collision import Sonar
 
-# import RPi.GPIO as GPIO
+
 import dronekit
 import math
 import os
@@ -491,8 +490,6 @@ class FailsafeController(threading.Thread):
   def run(self):
     while not self.stoprequest.isSet():
       if self.atc.STATE == VehicleStates.hover or self.atc.STATE == VehicleStates.flying:
-        # self.atc.check_gimbal_angle()
-        # self.atc.check_sonar_sensors()
         self.atc.check_battery_voltage()
       if(self.atc.realsense_range_finder != None):
         self.atc.send_distance_message()
@@ -504,5 +501,4 @@ class FailsafeController(threading.Thread):
         if(self.atc.realsense_range_finder != None):
           self.atc.realsense_range_finder.shutdown()
     self.stoprequest.set()
-    # GPIO.cleanup()
     super(FailsafeController, self).join(timeout)
