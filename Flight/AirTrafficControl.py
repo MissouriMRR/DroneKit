@@ -318,8 +318,8 @@ class Tower(object):
 
     distance = None
     sensor_rotation = None
-    lidar_data = LIDAR.get_lidar_data()
-    for data in lidar_data:
+
+    for data in LIDAR.get_lidar_data():
         distance = data[0]
         sensor_rotation = data[1]
         
@@ -425,7 +425,7 @@ class Tower(object):
 
     initial_alt = self.vehicle.location.global_relative_frame.alt
 
-    while((initial_alt - self.vehicle.location.global_relative_frame.alt) > LAND_ALTITUDE):
+    while((initial_alt - self.vehicle.location.global_relative_frame.alt) >= self.LAND_ALTITUDE):
       self.set_angle_thrust(StandardAttitudes.level, StandardThrusts.land)
 
     self.disarm_drone()

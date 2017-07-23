@@ -1,5 +1,7 @@
 import itertools
 import sys
+import math
+
 from sweeppy import Sweep
 
 
@@ -29,14 +31,14 @@ class LIDAR():
     lidar_data = []
 
     # get_scans is coroutine-based generator lazily returning scans ad infinitum
-    for scan in itertools.islice(sweep.get_scans(), 1):
+    for scan in itertools.islice(self.sweep.get_scans(), 1):
         for sample in scan.samples:
           distance = sample.distance
           angle = math.radians(sample.angle / 1000.0) % 360.0
         #   x = math.cos(angle) * distance
         #   y = math.sin(angle) * distance
-          if distance < MAX_SAFE_DISTANCE:
-            lidar_data.append([distance, (angle%360.0)//ANGLE_DIVISOR])
+          if distance < self.MAX_SAFE_DISTANCE:
+            lidar_data.append([distance, (angle % 360.0) // self.ANGLE_DIVISOR])
 
     return lidar_data
 
