@@ -16,7 +16,7 @@ class LIDAR():
 
   def connect_to_lidar(self):
     self.sweep.__enter__()
-    
+    # Starts scanning as soon as the motor is ready
     self.sweep.set_motor_speed(2)
     self.sweep.set_sample_rate(1000)
 
