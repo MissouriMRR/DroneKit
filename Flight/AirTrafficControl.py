@@ -151,7 +151,7 @@ class Tower(object):
         self.realsense_range_finder = RealSense.RangeFinder()
         self.realsense_range_finder.initialize_camera()
         self.vehicle.parameters['RNGFND_TYPE'] = self.MAV_RANGEFINDER
-      if(enable_LIDAR):
+      if(enable_lidar):
         self.scanse = LIDAR()
         self.scanse.connect_to_lidar()
       self.failsafes = FailsafeController(self)

@@ -10,9 +10,8 @@ class LIDAR():
   QUADRANT_SIZE = 45.0
 
   def __init__(self):
-    self.lidar_sensor = "/dev/ttyUSB0"
+    self.lidar_sensor = "/dev/serial/by-id/usb-FTDI_FT230X_Basic_UART_DO00867Q-if00-port0"
     self.sweep = None
-    # self.enable_scanning = False
 
   def connect_to_lidar(self):
     self.sweep = Sweep(self.lidar_sensor)
