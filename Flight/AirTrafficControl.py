@@ -14,8 +14,9 @@ from os import system
 import sys
 from time import sleep
 from copy import deepcopy
+# from Collision import Sonar
 
-
+# import RPi.GPIO as GPIO
 import dronekit
 import math
 import os
@@ -414,7 +415,7 @@ class Tower(object):
     else:
       self.STATE = VehicleStates.landed
 
-  def land_attitude(self)
+  def land_attitude(self):
 
     initial_alt = self.vehicle.location.global_relative_frame.alt
 
@@ -422,7 +423,7 @@ class Tower(object):
       self.set_angle_thrust(StandardAttitudes.level, StandardThrusts.land)
 
     self.disarm_drone()
-  
+  f
   def do_circle_turn(self, desired_angle, direction, duration):
     if(duration > self.MAX_TURN_TIME):
       return
@@ -490,6 +491,8 @@ class FailsafeController(threading.Thread):
   def run(self):
     while not self.stoprequest.isSet():
       if self.atc.STATE == VehicleStates.hover or self.atc.STATE == VehicleStates.flying:
+        # self.atc.check_gimbal_angle()
+        # self.atc.check_sonar_sensors()
         self.atc.check_battery_voltage()
       if(self.atc.realsense_range_finder != None):
         self.atc.send_distance_message()
@@ -501,4 +504,5 @@ class FailsafeController(threading.Thread):
         if(self.atc.realsense_range_finder != None):
           self.atc.realsense_range_finder.shutdown()
     self.stoprequest.set()
+    # GPIO.cleanup()
     super(FailsafeController, self).join(timeout)
