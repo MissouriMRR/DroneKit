@@ -14,9 +14,9 @@ from os import system
 import sys
 from time import sleep
 from copy import deepcopy
-# from Collision import Sonar
 
-# import RPi.GPIO as GPIO
+from Scanse import LIDAR
+
 import dronekit
 import math
 import os
@@ -67,7 +67,11 @@ class StandardAttitudes(object):
 
 class StandardThrusts(object):
   none = 0.00
+<<<<<<< HEAD
   low = 0.25
+=======
+  land = 0.25
+>>>>>>> 1b25b7703c9cf46c838236c13753d01ff2469e6e
   hover = 0.525
   takeoff = 0.75
   full = 1.00
@@ -108,6 +112,8 @@ class Tower(object):
   MAX_LIDAR_DISTANCE = 40000
   MAV_SENSOR_ROTATION_PITCH_270 = 25
   MAV_RANGEFINDER = 10
+  MAV_PERIPHERAL_ID = 195
+  GIMBAL_PORTRAIT = "86 0 "
 
   def __init__(self):
     self.start_time = 0
@@ -117,11 +123,13 @@ class Tower(object):
     self.initial_yaw = 0
     self.scanField = False
     self.realsense_range_finder = None
+    self.scanse = None
     self.LAST_ATTITUDE = StandardAttitudes.level
     self.LAST_THRUST = StandardThrusts.none
     self.STATE = VehicleStates.unknown
 
   def initialize(self, should_write_to_file=False, enable_realsense=False):
+  def initialize(self, should_write_to_file=False, enable_realsense=False, enable_lidar=False):
     """
     @purpose: Connect to the flight controller, start the failsafe
               thread, switch to GUIDED_NOGPS, and open a file to
@@ -137,6 +145,7 @@ class Tower(object):
 
       print("\nConnecting via USB to PixHawk...")
       self.vehicle = dronekit.connect(self.BEBOP, wait_ready=True)
+      self.vehicle = dronekit.connect(self.USB, wait_ready=True)
 
       if not self.vehicle:
         print("\nUnable to connect to vehicle.")
@@ -149,6 +158,9 @@ class Tower(object):
         self.realsense_range_finder = RealSense.RangeFinder()
         self.realsense_range_finder.initialize_camera()
         self.vehicle.parameters['RNGFND_TYPE'] = self.MAV_RANGEFINDER
+      if(enable_lidar):
+        self.scanse = LIDAR()
+        self.scanse.connect_to_lidar()
       self.failsafes = FailsafeController(self)
       self.failsafes.start()
       self.start_time = time.time()
@@ -317,6 +329,64 @@ class Tower(object):
     distance = None
     sensor_rotation = None
 
+
+    self.vehicle.simple_takeoff(self.STANDARD_MATCH_ALTITUDE)
+
+    sleep(5)
+
+    self.send_ned_velocity(0.5, 0, -0.1)
+    self.send_ned_velocity(0.5, 0, -0.1)
+    self.send_ned_velocity(0.5, 0, -0.1)
+    self.send_ned_velocity(0.5, 0, -0.1)
+
+    self.hover()
+
+    sleep(5)
+
+    self.land()
+
+  def send_ned_velocity(self, velocity_x, velocity_y, velocity_z):
+    """
+    Move vehicle in direction based on specified velocity vectors.
+    """
+    message = self.vehicle.message_factory.set_position_target_local_ned_encode(
+        0,                                    # time_boot_ms (not used)
+        0, 0,                                 # target system, target component
+        self.MAV_FRAME_LOCAL_NED,             # frame
+        self.NED_VELOCITY_BIT_FLAGS,          # type_mask (only speeds enabled)
+        1, 1, 1,                              # x, y, z positions
+        velocity_x, velocity_y, velocity_z,   # x, y, z velocity in m/s
+        0, 0, 0,                              # x, y, z acceleration (not supported yet, ignored in GCS_Mavlink)
+        0, 0)                                 # yaw, yaw_rate (not supported yet, ignored in GCS_Mavlink)
+    self.vehicle.send_mavlink(message)
+    self.vehicle.commands.upload()
+    sleep(0.1)
+
+  def send_distance_message(self):
+    distance = self.realsense_range_finder.get_average_depth()
+
+    message = self.vehicle.message_factory.distance_sensor_encode(
+        0,                                             # time since system boot, not used
+        self.MIN_REALSENSE_DISTANCE_CM,                # min distance cm
+        self.MAX_REALSENSE_DISTANCE_CM,                # max distance cm
+        distance,                                      # current distance, must be int
+        0,                                             # type = laser
+        0,                                             # onboard id, not used
+        self.MAV_SENSOR_ROTATION_PITCH_270,            # must be set to MAV_SENSOR_ROTATION_PITCH_270 for                                            # mavlink rangefinder, represents downward facing
+        0                                              # covariance, not used
+    )
+    self.vehicle.send_mavlink(message)
+    self.vehicle.commands.upload()
+
+  def send_distance_lidar_message(self):
+
+    distance = None
+    sensor_rotation = None
+
+    for data in self.scanse.get_lidar_data():
+        distance = data[0]
+        sensor_rotation = data[1]
+        
     message = self.vehicle.message_factory.distance_sensor_encode(
         0,                                             # time since system boot, not used
         self.MIN_LIDAR_DISTANCE,                       # min distance cm
@@ -324,6 +394,7 @@ class Tower(object):
         distance,                                      # current distance, must be int
         0,                                             # type = laser
         0,                                             # onboard id, not used
+        self.MAV_PERIPHERAL_ID,                                             # onboard id, not used
         sensor_rotation,                               # sensor rotation
         0                                              # covariance, not used
     )
@@ -415,6 +486,25 @@ class Tower(object):
     else:
       self.STATE = VehicleStates.landed
 
+  def land_attitude(self):
+
+    initial_alt = self.vehicle.location.global_relative_frame.alt
+
+    while((initial_alt - self.vehicle.location.global_relative_frame.alt) >= self.LAND_ALTITUDE):
+      self.set_angle_thrust(StandardAttitudes.level, StandardThrusts.land)
+    print "Disarming Drone"
+    self.disarm_drone()
+
+  def land_guided(self):
+    initial_alt = self.vehicle.location.global_relative_frame.alt 
+    self.switch_control(mode_name="GUIDED")
+
+    while((initial_alt - self.vehicle.location.global_relative_frame.alt) >= self.LAND_ALTITUDE):
+      self.send_ned_velocity(0, 0, 0.3)
+    print "Disarming Drone"
+    self.disarm_drone()
+
+
   def do_circle_turn(self, desired_angle, direction, duration):
     if(duration > self.MAX_TURN_TIME):
       return
@@ -461,6 +551,7 @@ class Tower(object):
       gimbal = serial.Serial("/dev/ttyS1", 115200, timeout=10)
       if self.scanField == False:
           gimbal.write("86 0 ")
+          gimbal.write(self.GIMBAL_PORTRAIT)
           gimbal.close()
           self.scanField = True
       else:
@@ -487,6 +578,12 @@ class FailsafeController(threading.Thread):
         self.atc.check_battery_voltage()
       if(self.atc.realsense_range_finder != None):
         self.atc.send_distance_message()
+        self.atc.check_battery_voltage()
+      if(self.atc.realsense_range_finder != None):
+        self.atc.send_distance_message()
+      if(self.atc.scanse != None):
+        self.atc.send_distance_lidar_message()
+      sleep(0.01) 
 
   def join(self, timeout=None):
     if self.atc.vehicle.armed:
@@ -496,4 +593,8 @@ class FailsafeController(threading.Thread):
           self.atc.realsense_range_finder.shutdown()
     self.stoprequest.set()
     # GPIO.cleanup()
+    super(FailsafeController, self).join(timeout)
+        if(self.atc.scanse != None):
+          self.atc.scanse.shutdown()
+    self.stoprequest.set()
     super(FailsafeController, self).join(timeout)
