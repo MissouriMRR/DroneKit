@@ -5,7 +5,7 @@ import os
 import builtins
 import cv2
 
-WORKING_DIR = r'/home/christopher/Downloads/Roomba Dataset/Positives'
+WORKING_DIR = r'/home/christopher/DroneKit/Vision/Roombas/Roomba Dataset/Positives'
 
 RESIZE_DOC = \
 '''Syntax: resize <scaleBy>

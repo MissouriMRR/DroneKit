@@ -71,7 +71,7 @@ class Annotations( ):
 
     def save( self, asFileName ):
         with open( asFileName, 'wb' ) as outFile:
-            pickle.dump( self.annotations, outFile )
+            pickle.dump( self.annotations, outFile, protocol = 2)
 
 @workingdir
 def _mainloop( annotator ):

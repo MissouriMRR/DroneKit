@@ -58,9 +58,6 @@ class ImageNormalizer():
         params['vertical_flip'] = flip_val == ImageNormalizer.FLIP_VERTICAL or flip_val == ImageNormalizer.FLIP_HORIZONTAL_AND_VERTICAL
         params['horizontal_flip'] = flip_val == ImageNormalizer.FLIP_HORIZONTAL or flip_val == ImageNormalizer.FLIP_HORIZONTAL_AND_VERTICAL
         del params[FLIP_PARAM_KEY]
-      
-      if 'preprocessing_function' in params.keys():
-        self.normalizationParams['preprocessing_function'] = params['preprocessing_function']
 
       self.preprocessParams.update(params)
 

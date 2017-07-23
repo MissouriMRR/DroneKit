@@ -2,7 +2,7 @@ from __future__ import absolute_import, division, print_function, unicode_litera
 from optparse import OptionParser
 from timeit import default_timer as timer
 
-WINDOW_TITLE = 'Face Detector Test'
+WINDOW_TITLE = 'Roomba Detector Test'
 LIVE_WINDOW_TITLE = 'RealSense Test'
 
 PROFILE = True
@@ -11,9 +11,18 @@ DEBUG = False
 GREEN = (0, 255, 0)
 THICKNESS = 3
 
+ROOMBA_POSITIVE_IMAGE_FOLDER = r'/home/christopher/DroneKit/Vision/Roombas/Roomba Dataset/Positives'
+ROOMBA_NEGATIVE_IMAGE_FOLDER = r'/home/christopher/DroneKit/Vision/Roombas/Roomba Dataset/Negatives'
+ROOMBA_ANNOTATIONS_FILE = r'/home/christopher/DroneKit/Vision/Roombas/Roomba Dataset/annotations'
+
 if __name__ == '__main__':
     from .data import DatasetManager
     from .model import MODELS
+
+    import os
+    import numpy as np
+    import pickle
+    import cv2
 
     parser = OptionParser()
     parser.add_option('-s', '--stage', dest='stageIdx', help='Cascade stage index', metavar = '[0-2]', default = 2)
@@ -25,26 +34,75 @@ if __name__ == '__main__':
 
     (options, args) = parser.parse_args()
 
+    def getRoombaAnnotations(annotationsFilePath = ROOMBA_ANNOTATIONS_FILE, posImgFolder = ROOMBA_POSITIVE_IMAGE_FOLDER):
+        roombas = []
+
+        with open(annotationsFilePath, 'rb') as annotationsFile:
+            annotations = pickle.load(annotationsFile)
+
+            for curFileName, curFileAnnotations in annotations.items():
+                curFilePath = os.path.join(posImgFolder, curFileName)
+
+                if os.path.isfile(curFilePath):
+                    for annotation in curFileAnnotations:
+                        top_x, top_y = tuple(annotation[:,0])
+                        bottom_x, bottom_y = tuple(annotation[:, 1])
+                        roombas.append((curFilePath, top_x, top_y, np.abs(top_x - bottom_x), np.abs(top_y - bottom_y)))
+
+        return roombas
+
+    def getRoombaProposals(img):
+        THRESHOLD_MIN = 135
+        THRESHOLD_MAX = 255
+        MIN_AREA = 50
+
+        proposals = []
+        centers = []
+
+        hsvImage = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+        ret, thresholded = cv2.threshold(hsvImage[:,:,1], THRESHOLD_MIN, THRESHOLD_MAX, cv2.THRESH_BINARY)
+        erosion = cv2.erode(thresholded, np.ones((11,11), np.uint8))
+        closing = cv2.morphologyEx(erosion, cv2.MORPH_CLOSE, np.ones((15,15), np.uint8), iterations = 5)
+        
+        modifiedImg, contours, hierarchy = cv2.findContours(closing, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+
+        for contour in contours:
+            area = cv2.contourArea(contour)
+            if area >= MIN_AREA:
+                moments = cv2.moments(contour)
+                centers.append((int(moments['m10'] / moments['m00']), int(moments['m01'] / moments['m00'])))
+                x, y, w, h = cv2.boundingRect(contour)
+                dimensions = np.array([w, h])
+                topLeft = np.array([x, y]) - MIN_AREA
+                bottomRight = np.array([x, y]) + dimensions + MIN_AREA
+                proposals.append((*tuple(topLeft.astype(int)), *tuple(bottomRight.astype(int))))
+            
+        return proposals, centers
+    
+    def getRoombaImagePaths(posImgFolder = ROOMBA_POSITIVE_IMAGE_FOLDER):
+        return [os.path.join(posImgFolder, fileName) for fileName in os.listdir(posImgFolder)]
+
     if options.trainMode or options.evalMode:
         model = MODELS[options.trainCalib][int(options.stageIdx)]
-        datasetManager = DatasetManager(model)
+        datasetManager = DatasetManager(model, getObjectAnnotations = getRoombaAnnotations, posImgFolder = ROOMBA_POSITIVE_IMAGE_FOLDER, negImgFolder = ROOMBA_NEGATIVE_IMAGE_FOLDER)
 
     def predictionCallback(img):
         import cv2
-        from .detect import detectMultiscale
+        from .detect import fastDetect
         start = timer()
-        detections = detectMultiscale(img, int(options.stageIdx))
+        detections, centers = fastDetect(img, getRoombaProposals)
 
         if PROFILE:
             print('Prediction took %fs' % (timer() - start,))
         
-        for (xMin, yMin, xMax, yMax) in detections: 
+        for i, (xMin, yMin, xMax, yMax) in enumerate(detections): 
             cv2.rectangle(img, (xMin, yMin), (xMax, yMax), GREEN, THICKNESS)
+            cv2.circle(img, tuple(centers[i]), 5, (255, 0, 0), 3)
 
     if options.testMode:
         from .visualize import visualizer
         from .data import getTestImagePaths
-        visualizer(getTestImagePaths(), predictionCallback, WINDOW_TITLE)
+        visualizer(getRoombaImagePaths(), predictionCallback, WINDOW_TITLE)
     elif options.trainMode:
         from .train import train
         train(model, datasetManager)

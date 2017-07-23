@@ -95,8 +95,17 @@ ENV/
 /Vision/Object Detection/Negative Images/**
 /Vision/Object Detection/aflw/**
 /Vision/Object Detection/aflw/
+
+/Vision/Face Detection/Annotated Faces in the Wild/
+/Vision/Face Detection/Annotated Faces in the Wild/**
+/Vision/Face Detection/Negative Images/
+/Vision/Face Detection/Negative Images/**
+/Vision/Face Detection/aflw/**
+/Vision/Face Detection/aflw/
+
 /Vision/Roombas/Roomba Dataset/**
 /Vision/Roombas/Roomba Dataset/
 
 #Ignore dataset files
 /Vision/Object Detection/data/*.hdf
+/Vision/Face Detection/data/*.hdf

@@ -23,13 +23,13 @@ TEST_IMAGES_FOLDER = 'Annotated Faces in the Wild/originalPics'
 
 DATASET_LABEL = 'data'
 LABELS_LABEL = 'labels'
-CHUNK_SIZE = 128
+CHUNK_SIZE = 256
 
 NEGATIVE_IMAGE_FOLDER = 'Negative Images/images/'
 NEGATIVE_DATABASE_PATHS = ('data/neg12.hdf', 'data/neg24.hdf', 'data/neg48.hdf')
 TARGET_NUM_NEGATIVES_PER_IMG = 40
 TARGET_NUM_NEGATIVES = 300000
-MIN_OBJECT_SCALE = 80
+MIN_FACE_SCALE = 80
 OFFSET = 4
 
 SCALES = ((12,12), (24,24), (48,48))
@@ -103,7 +103,7 @@ def createNegativeDataset(stageIdx, negImgFolder = NEGATIVE_IMAGE_FOLDER, numNeg
 
     for i in np.random.permutation(len(negativeImagePaths)):
         if negIdx >= numNegatives: break
-        img = cv2.resize(cv2.imread(negativeImagePaths[i]), None, fx = resizeTo[0]/MIN_OBJECT_SCALE, fy = resizeTo[1]/MIN_OBJECT_SCALE)
+        img = cv2.resize(cv2.imread(negativeImagePaths[i]), None, fx = resizeTo[0]/MIN_FACE_SCALE, fy = resizeTo[1]/MIN_FACE_SCALE)
 
         for xOffset in np.random.permutation(numDetectionWindowsAlongAxis(img.shape[1], stageIdx)):
             if negIdx >= numNegatives or numNegativesRetrievedFromImg >= numNegativesPerImg: break

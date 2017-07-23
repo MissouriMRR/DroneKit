@@ -36,7 +36,7 @@ NET_FILE_NAMES = {False: {SCALES[0][0]: '12net.hdf', SCALES[1][0]: '24net.hdf', 
 
 DROPOUT_PARAM_ID = 'dropout'
 OPTIMIZER_PARAMS = ['lr', 'momentum', 'decay', 'nesterov']
-NORMALIZATION_PARAMS = ['norm', 'flip', 'preprocessing_function', 'width_shift_range', 'height_shift_range', 'rotation_range']
+NORMALIZATION_PARAMS = ['norm', 'flip']
 TRAIN_PARAMS = ['batchSize']
 
 OPTIMIZER = SGD
@@ -288,15 +288,12 @@ class StageOneClassifier(ObjectClassifier):
         'dropout0': HP.uniform(0, .75),
         'dropout1': HP.uniform(0, .75),
         'lr': HP.loguniform(1e-4, 1),
-        'batchSize': HP.choice(64),
+        'batchSize': HP.choice(128),
         'norm':  HP.choice(ImageNormalizer.STANDARD_NORMALIZATION),
         'flip': HP.choice(ImageNormalizer.FLIP_HORIZONTAL),
         'momentum': HP.choice(.9),
         'decay': HP.choice(1e-4),
-        'nesterov': HP.choice(True),
-        'width_shift_range': HP.choice(.2),
-        'height_shift_range': HP.choice(.2),
-        'rotation_range': HP.choice(30)
+        'nesterov': HP.choice(True)
     }
 
     def __init__(self):
@@ -328,15 +325,12 @@ class StageTwoClassifier(ObjectClassifier):
         'dropout0': HP.uniform(0, .75),
         'dropout1': HP.uniform(0, .75),
         'lr': HP.loguniform(1e-4, 1),
-        'batchSize': HP.choice(64),
+        'batchSize': HP.choice(512),
         'norm':  HP.choice(ImageNormalizer.STANDARD_NORMALIZATION),
         'flip': HP.choice(ImageNormalizer.FLIP_HORIZONTAL),
         'momentum': HP.choice(.9),
         'decay': HP.choice(1e-4),
-        'nesterov': HP.choice(True),
-        'width_shift_range': HP.choice(.2),
-        'height_shift_range': HP.choice(.2),
-        'rotation_range': HP.choice(30)
+        'nesterov': HP.choice(True)
     }
 
     def __init__(self):
