@@ -6,29 +6,17 @@ from sweeppy import Sweep
 
 
 class LIDAR():
-
-  def __init__(self):
-    self.sweep = None
-    self.enable_scanning = False
   MAX_SAFE_DISTANCE = 300.0
   QUADRANT_SIZE = 45.0
+
   def __init__(self):
     self.lidar_sensor = "/dev/serial/by-id/usb-FTDI_FT230X_Basic_UART_DO00867Q-if00-port0"
     self.sweep = None
 
   def connect_to_lidar(self):
     self.sweep.__enter__()
-
-    speed = self.sweep.get_motor_speed()
-    rate = self.sweep.get_sample_rate()
-
-    print('Motor Speed: {} Hz'.format(speed))
-    print('Sample Rate: {} Hz'.format(rate))
-
-  def get_lidar_data(self):
     # Starts scanning as soon as the motor is ready
     self.sweep.start_scanning()
-
 
     self.sweep.set_motor_speed(2)
     self.sweep.set_sample_rate(1000)
