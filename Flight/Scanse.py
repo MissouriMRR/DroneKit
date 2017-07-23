@@ -18,7 +18,7 @@ class LIDAR():
 
   def connect_to_lidar(self):
     self.sweep.__enter__()
-    
+
     speed = self.sweep.get_motor_speed()
     rate = self.sweep.get_sample_rate()
 
@@ -28,7 +28,7 @@ class LIDAR():
   def get_lidar_data(self):
     # Starts scanning as soon as the motor is ready
     self.sweep.start_scanning()
-    
+
 
     self.sweep.set_motor_speed(2)
     self.sweep.set_sample_rate(1000)
@@ -44,13 +44,6 @@ class LIDAR():
 
     # get_scans is coroutine-based generator lazily returning scans ad infinitum
     for scan in itertools.islice(self.sweep.get_scans(), 1):
-      pass
-
-    return lidar_data
-    
-  def shutdown(self):
-    self.sweep.__exit__()
-
       for sample in scan.samples:
         distance = sample.distance
         angle_deg = (sample.angle / 1000.0) % 360.0
@@ -59,7 +52,7 @@ class LIDAR():
         # y = math.sin(angle_rad) * distance
         if distance < self.MAX_SAFE_DISTANCE:
           lidar_data.append([distance, ((angle_deg % 360.0) // self.QUADRANT_SIZE) ])
-	
+
     return lidar_data
 
   def shutdown(self):
