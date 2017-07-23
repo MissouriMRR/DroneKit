@@ -15,8 +15,7 @@ import sys
 from time import sleep
 from copy import deepcopy
 
-from Scance import LIDAR
-
+from Scanse import LIDAR
 
 import dronekit
 import math
@@ -119,11 +118,12 @@ class Tower(object):
     self.initial_yaw = 0
     self.scanField = False
     self.realsense_range_finder = None
+    self.scanse = None
     self.LAST_ATTITUDE = StandardAttitudes.level
     self.LAST_THRUST = StandardThrusts.none
     self.STATE = VehicleStates.unknown
 
-  def initialize(self, should_write_to_file=False, enable_realsense=False):
+  def initialize(self, should_write_to_file=False, enable_realsense=False, enable_LIDAR=False):
     """
     @purpose: Connect to the flight controller, start the failsafe
               thread, switch to GUIDED_NOGPS, and open a file to
@@ -151,6 +151,9 @@ class Tower(object):
         self.realsense_range_finder = RealSense.RangeFinder()
         self.realsense_range_finder.initialize_camera()
         self.vehicle.parameters['RNGFND_TYPE'] = self.MAV_RANGEFINDER
+      if(enable_LIDAR):
+        self.scanse = LIDAR()
+        self.scanse.connect_to_lidar()
       self.failsafes = FailsafeController(self)
       self.failsafes.start()
       self.start_time = time.time()
@@ -308,7 +311,7 @@ class Tower(object):
         distance,                                      # current distance, must be int
         0,                                             # type = laser
         0,                                             # onboard id, not used
-        self.MAV_SENSOR_ROTATION_PITCH_270,            # must be set to MAV_SENSOR_ROTATION_PITCH_270 for                                                 mavlink rangefinder, represents downward facing
+        self.MAV_SENSOR_ROTATION_PITCH_270,            # must be set to MAV_SENSOR_ROTATION_PITCH_270 for                                            # mavlink rangefinder, represents downward facing
         0                                              # covariance, not used
     )
     self.vehicle.send_mavlink(message)
@@ -319,7 +322,7 @@ class Tower(object):
     distance = None
     sensor_rotation = None
 
-    for data in LIDAR.get_lidar_data():
+    for data in self.scanse.get_lidar_data():
         distance = data[0]
         sensor_rotation = data[1]
         
@@ -510,6 +513,9 @@ class FailsafeController(threading.Thread):
         self.atc.check_battery_voltage()
       if(self.atc.realsense_range_finder != None):
         self.atc.send_distance_message()
+      if(self.atc.scanse != None):
+        self.atc.send_distance_lidar_message()
+      sleep(0.01) 
 
   def join(self, timeout=None):
     if self.atc.vehicle.armed:
@@ -517,5 +523,7 @@ class FailsafeController(threading.Thread):
         self.atc.land()
         if(self.atc.realsense_range_finder != None):
           self.atc.realsense_range_finder.shutdown()
+        if(self.atc.scanse != None):
+          self.atc.scanse.shutdown()
     self.stoprequest.set()
     super(FailsafeController, self).join(timeout)
