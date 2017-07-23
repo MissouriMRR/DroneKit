@@ -415,6 +415,15 @@ class Tower(object):
     else:
       self.STATE = VehicleStates.landed
 
+  def land_attitude(self)
+
+    initial_alt = self.vehicle.location.global_relative_frame.alt
+
+    while((initial_alt - self.vehicle.location.global_relative_frame.alt) > LAND_ALTITUDE):
+      self.set_angle_thrust(StandardAttitudes.level, StandardThrusts.land)
+
+    self.disarm_drone()
+  
   def do_circle_turn(self, desired_angle, direction, duration):
     if(duration > self.MAX_TURN_TIME):
       return
