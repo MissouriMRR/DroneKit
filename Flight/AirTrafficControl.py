@@ -434,10 +434,10 @@ class Tower(object):
     initial_alt = self.vehicle.location.global_relative_frame.alt 
     self.switch_control(mode_name="GUIDED")
 
-  while((initial_alt - self.vehicle.location.global_relative_frame.alt) > LAND_ALTITUDE):
-    self.send_ned_velocity(0, 0, 0.3)
-  print "Disarming Drone"
-  self.disarm_drone()
+    while((initial_alt - self.vehicle.location.global_relative_frame.alt) >= self.LAND_ALTITUDE):
+      self.send_ned_velocity(0, 0, 0.3)
+    print "Disarming Drone"
+    self.disarm_drone()
 
 
   def do_circle_turn(self, desired_angle, direction, duration):

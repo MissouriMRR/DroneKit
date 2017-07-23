@@ -7,7 +7,7 @@ from sweeppy import Sweep
 
 class LIDAR():
   MAX_SAFE_DISTANCE = 300.0
-  ANGLE_DIVISOR = 45.0
+  QUADRANT_SIZE = 45.0
 
   def __init__(self):
     self.lidar_sensor = "/dev/ttyUSB0"
@@ -32,14 +32,15 @@ class LIDAR():
 
     # get_scans is coroutine-based generator lazily returning scans ad infinitum
     for scan in itertools.islice(self.sweep.get_scans(), 1):
-        for sample in scan.samples:
-          distance = sample.distance
-          angle = math.radians(sample.angle / 1000.0) % 360.0
-        #   x = math.cos(angle) * distance
-        #   y = math.sin(angle) * distance
-          if distance < self.MAX_SAFE_DISTANCE:
-            lidar_data.append([distance, (angle % 360.0) // self.ANGLE_DIVISOR])
-
+      for sample in scan.samples:
+        distance = sample.distance
+        angle_deg = (sample.angle / 1000.0) % 360.0
+        angle_rad = math.radians(sample.angle / 1000.0)
+        # x = math.cos(angle_rad) * distance
+        # y = math.sin(angle_rad) * distance
+        if distance < self.MAX_SAFE_DISTANCE:
+          lidar_data.append([distance, ((angle_deg % 360.0) // self.QUADRANT_SIZE) ])
+	
     return lidar_data
 
   def shutdown(self):
