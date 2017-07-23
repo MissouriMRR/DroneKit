@@ -15,6 +15,9 @@ import sys
 from time import sleep
 from copy import deepcopy
 
+from Scance import LIDAR
+
+
 import dronekit
 import math
 import os
@@ -271,7 +274,7 @@ class Tower(object):
     self.send_ned_velocity(0.5, 0, -0.1)
     self.send_ned_velocity(0.5, 0, -0.1)
     self.send_ned_velocity(0.5, 0, -0.1)
-    
+
     self.hover()
 
     sleep(5)
@@ -315,7 +318,11 @@ class Tower(object):
 
     distance = None
     sensor_rotation = None
-
+    lidar_data = LIDAR.get_lidar_data()
+    for data in lidar_data:
+        distance = data[0]
+        sensor_rotation = data[1]
+        
     message = self.vehicle.message_factory.distance_sensor_encode(
         0,                                             # time since system boot, not used
         self.MIN_LIDAR_DISTANCE,                       # min distance cm
