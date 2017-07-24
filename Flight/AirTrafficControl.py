@@ -83,7 +83,7 @@ class VehicleStates(object):
   landed = "LANDED"
 
 class Tower(object):
-  SIMULATOR = "tcp:127.0.0.1:5760"
+  SIMULATOR = "127.0.0.1:14550"
   USB = "/dev/serial/by-id/usb-3D_Robotics_PX4_FMU_v2.x_0-if00"
   USB_DEV = "/dev/cu.usbmodem1"
   BEBOP = "tcp:192.168.42.1:14550"
@@ -140,8 +140,7 @@ class Tower(object):
         sys.stdout = self.flight_log
 
       print("\nConnecting via USB to PixHawk...")
-      self.vehicle = dronekit.connect(self.BEBOP, wait_ready=True)
-      self.vehicle = dronekit.connect(self.USB, wait_ready=True)
+      self.vehicle = dronekit.connect(self.SIMULATOR, wait_ready=True)
 
       if not self.vehicle:
         print("\nUnable to connect to vehicle.")
@@ -302,7 +301,7 @@ class Tower(object):
         0, 0)                                 # yaw, yaw_rate (not supported yet, ignored in GCS_Mavlink)
     self.vehicle.send_mavlink(message)
     self.vehicle.commands.upload()
-    sleep(0.1)
+    sleep(0.01)
 
   def send_distance_message(self):
     distance = self.realsense_range_finder.get_average_depth()
@@ -319,7 +318,7 @@ class Tower(object):
     )
     self.vehicle.send_mavlink(message)
     self.vehicle.commands.upload()
-    sleep(0.1)
+    sleep(0.01)
 
   def send_distance_lidar_message(self):
 
@@ -329,20 +328,20 @@ class Tower(object):
     for data in self.scanse.get_lidar_data():
         distance = data[0]
         sensor_rotation = data[1]
-        
-    message = self.vehicle.message_factory.distance_sensor_encode(
+        print("Distance :" + distance + " Quad: " + sensor_rotation)
+        message = self.vehicle.message_factory.distance_sensor_encode(
         0,                                             # time since system boot, not used
         self.MIN_LIDAR_DISTANCE,                       # min distance cm
         self.MAX_LIDAR_DISTANCE,                       # max distance cm
         distance,                                      # current distance, must be int
         0,                                             # type = laser
         0,                                             # onboard id, not used
-        self.MAV_PERIPHERAL_ID,                                             # onboard id, not used
         sensor_rotation,                               # sensor rotation
         0                                              # covariance, not used
-    )
-    self.vehicle.send_mavlink(message)
-    self.vehicle.commands.upload()
+        )
+        self.vehicle.send_mavlink(message)
+        self.vehicle.commands.upload()
+        sleep(0.1)
 
   def hover(self):
     self.switch_control("GUIDED")

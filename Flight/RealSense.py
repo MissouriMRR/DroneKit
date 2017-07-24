@@ -28,7 +28,7 @@ class RangeFinder():
             self.depth_scale = self.cam.depth_scale
         except pyrs.utils.RealsenseError as ex:
             stdout.write("\nFailed to initialize RealSense.\n")
-            stdout.write(ex)
+            stdout.write(str(ex))
             stdout.flush()
 
     def get_average_depth(self):

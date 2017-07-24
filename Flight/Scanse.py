@@ -5,7 +5,7 @@ import math
 from sweeppy import Sweep
 
 class LIDAR():
-  MAX_SAFE_DISTANCE = 300.0
+  MAX_REPORT_DISTANCE = 500.0
   QUADRANT_SIZE = 45.0
 
   def __init__(self):
@@ -15,13 +15,11 @@ class LIDAR():
     self.rate = 0
 
   def connect_to_lidar(self):
+    self.sweep = Sweep(self.lidar_sensor)
     self.sweep.__enter__()
     # Starts scanning as soon as the motor is ready
-    self.sweep.set_motor_speed(2)
-    self.sweep.set_sample_rate(1000)
-
-    self.speed = self.sweep.get_motor_speed()
-    self.rate = self.sweep.get_sample_rate()
+    self.sweep.set_motor_speed(5)
+    self.sweep.set_sample_rate(500)
 
     self.sweep.start_scanning()
 
@@ -37,8 +35,8 @@ class LIDAR():
         angle_rad = math.radians(sample.angle / 1000.0)
         # x = math.cos(angle_rad) * distance
         # y = math.sin(angle_rad) * distance
-        if distance < self.MAX_SAFE_DISTANCE:
-          lidar_data.append([distance, ((angle_deg % 360.0) // self.QUADRANT_SIZE) ])
+        if distance < self.MAX_REPORT_DISTANCE:
+          lidar_data.append([distance, ((angle_deg % 360) // self.QUADRANT_SIZE) ])
 
     return lidar_data
 

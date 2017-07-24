@@ -6,7 +6,7 @@ def send(pitch, roll, switch):
     rot13 = str(pitch)+" "+str(roll)+" "
   else:
     rot13 = "-256 -256 "
-  test = serial.Serial("/dev/ttyS1", 115200, timeout=10)
+  test = serial.Serial("/dev/ttyACM0", 115200, timeout=10)
   test.write(rot13)
   test.close()
 
