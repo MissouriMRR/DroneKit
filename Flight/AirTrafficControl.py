@@ -521,6 +521,10 @@ class FailsafeController(threading.Thread):
         self.atc.send_distance_message()
       if(self.atc.scanse != None):
         self.atc.send_distance_lidar_message()
+      try:
+        self.send_frame_to_drone()
+      except:
+        qwertyuiop = 1234
       sleep(0.01) 
 
   def join(self, timeout=None):
