@@ -111,6 +111,7 @@ class Tower(object):
   MAV_RANGEFINDER = 10
   MAV_PERIPHERAL_ID = 195
   GIMBAL_PORTRAIT = "86 0 "
+  TAKEOFF_HEIGHT = 1;
 
   def __init__(self):
     self.start_time = 0
@@ -371,6 +372,17 @@ class Tower(object):
     self.arm_drone()
     self.vehicle.simple_takeoff(target_altitude)
     self.hover()
+
+  def roomba_takeoff(self)
+
+    initial_alt = self.vehicle.location.global_relative_frame.alt
+
+    while((self.vehicle.location.global_relative_frame.alt - initial_alt) < TAKEOFF_HEIGHT):
+      self.set_angle_thrust(DroneAttitude(0,0, math.radians(self.initial_yaw)), StandardThrusts.takeoff)
+      sleep(self.STANDARD_SLEEP_TIME)
+
+    print('Reached target altitude:{0:.2f}m'.format(self.vehicle.location.global_relative_frame.alt))
+
 
   def fly_for_time(self, duration, direction, target_velocity, should_hover_on_finish):
     end_manuever = datetime.now() + timedelta(seconds=duration)
