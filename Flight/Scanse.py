@@ -18,7 +18,7 @@ class LIDAR():
     self.sweep = Sweep(self.lidar_sensor)
     self.sweep.__enter__()
     # Starts scanning as soon as the motor is ready
-    self.sweep.set_motor_speed(5)
+    self.sweep.set_motor_speed(2)
     self.sweep.set_sample_rate(500)
 
     self.sweep.start_scanning()

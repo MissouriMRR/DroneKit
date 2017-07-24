@@ -105,8 +105,8 @@ class Tower(object):
   MAV_FRAME_LOCAL_NED = 1
   MIN_REALSENSE_DISTANCE_CM = 30
   MAX_REALSENSE_DISTANCE_CM = 1000
-  MIN_LIDAR_DISTANCE = 50
-  MAX_LIDAR_DISTANCE = 40000
+  MIN_LIDAR_DISTANCE = 10
+  MAX_LIDAR_DISTANCE = 500
   MAV_SENSOR_ROTATION_PITCH_270 = 25
   MAV_RANGEFINDER = 10
   MAV_PERIPHERAL_ID = 195
@@ -328,7 +328,7 @@ class Tower(object):
     for data in self.scanse.get_lidar_data():
         distance = data[0]
         sensor_rotation = data[1]
-        print("Distance :" + distance + " Quad: " + sensor_rotation)
+        print("Distance :" + str(distance) + " Quad: " + str(sensor_rotation))
         message = self.vehicle.message_factory.distance_sensor_encode(
         0,                                             # time since system boot, not used
         self.MIN_LIDAR_DISTANCE,                       # min distance cm
@@ -341,7 +341,7 @@ class Tower(object):
         )
         self.vehicle.send_mavlink(message)
         self.vehicle.commands.upload()
-        sleep(0.1)
+        sleep(0.01)
 
   def hover(self):
     self.switch_control("GUIDED")
