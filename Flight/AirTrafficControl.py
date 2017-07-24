@@ -318,7 +318,6 @@ class Tower(object):
     )
     self.vehicle.send_mavlink(message)
     self.vehicle.commands.upload()
-    sleep(0.01)
 
   def send_distance_lidar_message(self):
 
@@ -341,7 +340,6 @@ class Tower(object):
         )
         self.vehicle.send_mavlink(message)
         self.vehicle.commands.upload()
-        sleep(0.1)
 
   def hover(self):
     self.switch_control("GUIDED")
