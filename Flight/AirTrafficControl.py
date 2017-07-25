@@ -16,6 +16,8 @@ from time import sleep
 from copy import deepcopy
 
 from Scanse import LIDAR
+# from Vision import *
+# import "serverClient as SC"#import the client side of the server to recieve the distance data
 
 import dronekit
 import math
@@ -269,6 +271,33 @@ class Tower(object):
     self.last_attitude = attitude
     self.last_thrust = thrust
 
+  #mission one uses the drone, x, y, or z direction, desired speed, distance desired and the height that is wanted
+#Utilizes "send_ned_velocity()" so this requires an Optical Flow sensor or GPS to be enabled to utilize this command
+
+  def smo_attitudes(self,distance,height):
+    self.STATE = VehicleStates.takeoff
+
+    self.arm_drone()
+    self.switch_control()
+
+    initial_alt = self.vehicle.location.global_relative_frame.alt
+
+    while((self.vehicle.location.global_relative_frame.alt - initial_alt) < height):
+      self.set_angle_thrust(StandardAttitudes.level, StandardThrusts.takeoff)
+      sleep(self.STANDARD_SLEEP_TIME)
+
+    print('Reached target altitude:{0:.2f}m'.format(self.vehicle.location.global_relative_frame.alt))
+    #utilizes desired direction that was input to move
+    self.vehicle.mode = dronekit.VehicleMode("GUIDED_NoGPS")
+    #for X axis
+    initial_lat = self.vehicle.location.global_relative_frame.lat
+    #for Y axis
+    initial_lon = self.vehicle.location.global_relative_frame.lon
+    while((self.vehicle.location.global_relative_frame.lon - initial_lon) < distance):
+      self.set_angle_thrust(StandardAttitudes.forward, StandardThrusts.hover)
+    print "Reached target distance. \nNow Landing!"
+    self.land()
+
   def smo_guided(self):
     self.switch_control(mode_name="GUIDED")
     self.arm_drone()
@@ -287,6 +316,23 @@ class Tower(object):
     sleep(5)
 
     self.land()
+
+  # def follow_guided(self, distance, angle):
+
+
+  #   self.switch_control(mode_name="GUIDED")
+
+  #   initial_angle = 'angle'
+  #   initial_distance = 'distance'
+  #   #for X axis
+  #   initial_lat = self.vehicle.location.global_relative_frame.lat #Left and Right
+  #   #for Y axis
+  #   initial_lon = self.vehicle.location.global_relative_frame.lon #Forward and Back
+  #   initial_hypot = sqrt((initial_angle*initial_angle)+(initial_distance*initial_distance))
+  #   while((sqrt((self.vehicle.location.global_relative_frame.lon*self.vehicle.location.global_relative_frame.lon)+(self.vehicle.location.global_relative_frame.lat*self.vehicle.location.global_relative_frame.lat))) < initial_hypot)
+  #   self.send_ned_velocity()  
+  
+  #   distance = ()
 
   def send_ned_velocity(self, velocity_x, velocity_y, velocity_z):
     """
@@ -373,7 +419,7 @@ class Tower(object):
     self.vehicle.simple_takeoff(target_altitude)
     self.hover()
 
-  def roomba_takeoff(self)
+  def roomba_takeoff(self):
 
     initial_alt = self.vehicle.location.global_relative_frame.alt
 
