@@ -11,15 +11,16 @@
 
 from datetime import datetime, timedelta
 from os import system
-import sys
 from time import sleep
 from copy import deepcopy
+from timeit import default_timer as timer
 
 from Scanse import LIDAR
 
 import dronekit
 import math
 import os
+import sys
 import time
 import threading
 import serial
@@ -73,6 +74,12 @@ class StandardThrusts(object):
   takeoff = 0.75
   full = 1.00
 
+class StandardVelocities(object):
+  roomba = 0.33
+  low = 0.5
+  med = 1.0
+  high = 2.0
+
 class VehicleStates(object):
   hover = "HOVER"
   flying = "FLYING"
@@ -89,7 +96,6 @@ class Tower(object):
   BEBOP = "tcp:192.168.42.1:14550"
   STANDARD_ATTITUDE_BIT_FLAGS = 0b00111111
   NED_VELOCITY_BIT_FLAGS = 0b0000111111000111
-  FLIP_ATTITUDE_BIT_FLAGS = 0b00111000
   STANDARD_THRUST_CHANGE = 0.05
   MAX_TURN_TIME = 5
   LAND_ALTITUDE = 0.5
@@ -97,17 +103,12 @@ class Tower(object):
   TURN_RADIUS = 0.5 # Meters
   STANDARD_ANGLE_ADJUSTMENT = 1.0
   MESSAGE_WAIT_TIME = 0.01
-  ACCEL_NOISE_THRESHOLD = 0.05
-  MAX_ANGLE_ALL_AXIS = 15.0
   BATTERY_FAILSAFE_VOLTAGE = 9.25
   STANDARD_SLEEP_TIME = 1
   STANDARD_MATCH_ALTITUDE = 2.0
   MAV_FRAME_LOCAL_NED = 1
-  MIN_REALSENSE_DISTANCE_CM = 30
-  MAX_REALSENSE_DISTANCE_CM = 1000
   MIN_LIDAR_DISTANCE = 10
   MAX_LIDAR_DISTANCE = 500
-  MAV_SENSOR_ROTATION_PITCH_270 = 25
   MAV_RANGEFINDER = 10
   MAV_PERIPHERAL_ID = 195
   GIMBAL_PORTRAIT = "86 0 "
@@ -118,7 +119,7 @@ class Tower(object):
     self.vehicle_initialized = False
     self.vehicle = None
     self.initial_yaw = 0
-    self.scanField = False
+    self.scanningField = False
     self.realsense_range_finder = None
     self.scanse = None
     self.LAST_ATTITUDE = StandardAttitudes.level
@@ -297,7 +298,7 @@ class Tower(object):
 
     self.switch_control("GUIDED")
 
-    sleep(2)
+    sleep(self.STANDARD_SLEEP_TIME)
 
     self.send_ned_velocity(1, 0, -0.1)
     self.send_ned_velocity(1, 0, -0.1)
@@ -307,7 +308,7 @@ class Tower(object):
   def smo_attitude(self):
     self.takeoff(1.75)
 
-    sleep(2)
+    sleep(self.STANDARD_SLEEP_TIME)
 
     self.set_angle_thrust(StandardAttitudes.forward, StandardThrusts.low)
     self.set_angle_thrust(StandardAttitudes.forward, StandardThrusts.low)
@@ -329,7 +330,21 @@ class Tower(object):
         0, 0)                                 # yaw, yaw_rate (not supported yet, ignored in GCS_Mavlink)
     self.vehicle.send_mavlink(message)
     self.vehicle.commands.upload()
-    sleep(0.01)
+    sleep(self.MESSAGE_WAIT_TIME)
+
+  def fly_distance(self, distance, velocity_x=0, velocity_y=0):
+    self.STATE = VehicleStates.flying
+    start = timer()
+    distance_traveled = 0.0
+    seconds_elapsed = 0.0
+
+    while(distance_traveled <= distance):
+      self.send_ned_velocity(velocity_x, velocity_y, 0)
+      sleep(self.MESSAGE_WAIT_TIME)
+      seconds_elapsed = (timer() - start())
+      distance_traveled = math.hypot(velocity_x * seconds_elapsed, velocity_y * seconds_elapsed)
+
+    self.hover()
 
   def send_lidar_message(self):
     distance = None
@@ -352,7 +367,25 @@ class Tower(object):
         self.vehicle.send_mavlink(message)
         self.vehicle.commands.upload()
 
+  def send_distance_message(self):
+    distance = self.realsense_range_finder.get_average_depth()
+
+    message = self.vehicle.message_factory.distance_sensor_encode(
+        0,                                             # time since system boot, not used
+        self.realsense_range_finder.MIN_REALSENSE_DISTANCE_CM,                # min distance cm
+        self.realsense_range_finder.MAX_REALSENSE_DISTANCE_CM,                # max distance cm
+        distance,                                      # current distance, must be int
+        0,                                             # type = laser
+        0,                                             # onboard id, not used
+        self.realsense_range_finder.MAV_SENSOR_ROTATION_PITCH_270,            # Downward facing range sensor.
+        0                                              # covariance, not used
+    )
+    self.vehicle.send_mavlink(message)
+    self.vehicle.commands.upload()
+    sleep(0.1)
+
   def hover(self):
+    self.STATE = VehicleStates.hover
     self.switch_control("GUIDED")
     self.send_ned_velocity(0, 0, 0)
 
@@ -440,15 +473,15 @@ class Tower(object):
 
   def switch_gimbal_mode(self):
       gimbal = serial.Serial("/dev/ttyS1", 115200, timeout=10)
-      if self.scanField == False:
+      if self.scanningField == False:
           gimbal.write("86 0 ")
           gimbal.write(self.GIMBAL_PORTRAIT)
           gimbal.close()
-          self.scanField = True
+          self.scanningField = True
       else:
           gimbal.write("s")
           gimbal.close()
-          self.scanField = False
+          self.scanningField = False
 
   def check_battery_voltage(self):
     if(self.vehicle.battery.voltage < self.BATTERY_FAILSAFE_VOLTAGE):

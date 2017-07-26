@@ -11,17 +11,14 @@ import logging
 import numpy as np
 import dronekit
 
-
-
 class RangeFinder():
     FPS = 60
-    INPUT_WIDTH = 320
-    INPUT_HEIGHT = 240
-    REGION_SIZE = 20
+    INPUT_WIDTH = 640
+    INPUT_HEIGHT = 480
+    REGION_SIZE = 50
     MIN_REALSENSE_DISTANCE_CM = 30
     MAX_REALSENSE_DISTANCE_CM = 1000
     MAV_SENSOR_ROTATION_PITCH_270 = 25
-    VEHICLE_CONNECTION_STRING = "127.0.0.1:14550"
 
     def __init__(self):
         cam = None
@@ -29,7 +26,6 @@ class RangeFinder():
         logging.basicConfig(level = logging.WARN)
         self.color_image = None
         self.depth_image = None
-        self.vehicle = None
 
     def initialize_camera(self):
         try:
@@ -40,10 +36,6 @@ class RangeFinder():
             stdout.write("\nFailed to initialize RealSense.\n")
             stdout.write(str(ex))
             stdout.flush()
-    
-    def connect_to_vehicle(self):
-        if(self.vehicle == None):
-            self.vehicle = dronekit.connect(self.VEHICLE_CONNECTION_STRING)
 
     def get_frame(self):
         self.cam.wait_for_frames()
@@ -66,28 +58,6 @@ class RangeFinder():
 
     def send_frame_to_ground(self):
         pass
-    
-    def send_distance_message(self):
-        try:
-            while(True):
-                distance = self.get_average_depth()
-
-                message = self.vehicle.message_factory.distance_sensor_encode(
-                    0,                                             # time since system boot, not used
-                    self.MIN_REALSENSE_DISTANCE_CM,                # min distance cm
-                    self.MAX_REALSENSE_DISTANCE_CM,                # max distance cm
-                    distance,                                      # current distance, must be int
-                    0,                                             # type = laser
-                    0,                                             # onboard id, not used
-                    self.MAV_SENSOR_ROTATION_PITCH_270,            # Downward facing range sensor.
-                    0                                              # covariance, not used
-                )
-                self.vehicle.send_mavlink(message)
-                self.vehicle.commands.upload()
-                sleep(0.1)
-
-        except KeyboardInterrupt:
-            self.shutdown()
 
     def shutdown(self):
         pyrs.stop()
