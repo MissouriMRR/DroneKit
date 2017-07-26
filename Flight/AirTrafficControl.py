@@ -152,7 +152,6 @@ class Tower(object):
       if(enable_realsense):
         self.realsense_range_finder = RealSense.RangeFinder()
         self.realsense_range_finder.initialize_camera()
-        self.vehicle.parameters['RNGFND_TYPE'] = self.MAV_RANGEFINDER
       if(enable_lidar):
         self.scanse = LIDAR()
         self.scanse.connect_to_lidar()
@@ -266,12 +265,19 @@ class Tower(object):
     self.vehicle.commands.upload()
     self.last_attitude = attitude
     self.last_thrust = thrust
+    
+  def guided_takeoff(self, target_altitude):
+    self.initial_yaw = self.vehicle.attitude.yaw
+    self.switch_control(mode_name="GUIDED")
+    self.arm_drone()
+    self.vehicle.simple_takeoff(target_altitude)
+    self.hover()
 
   def smo_guided(self):
     self.switch_control(mode_name="GUIDED")
     self.arm_drone()
 
-    self.vehicle.simple_takeoff(self.STANDARD_MATCH_ALTITUDE)
+    self.guided_takeoff(self.STANDARD_MATCH_ALTITUDE)
 
     sleep(5)
 
@@ -325,8 +331,7 @@ class Tower(object):
     self.vehicle.commands.upload()
     sleep(0.01)
 
-  def send_distance_lidar_message(self):
-
+  def send_lidar_message(self):
     distance = None
     sensor_rotation = None
 
@@ -368,13 +373,6 @@ class Tower(object):
 
     print('Reached target altitude:{0:.2f}m'.format(self.vehicle.location.global_relative_frame.alt))
 
-  def guided_takeoff(self, target_altitude):
-    self.initial_yaw = self.vehicle.attitude.yaw
-    self.switch_control(mode_name="GUIDED")
-    self.arm_drone()
-    self.vehicle.simple_takeoff(target_altitude)
-    self.hover()
-
   def land(self):
     self.vehicle.mode = dronekit.VehicleMode("LAND")
     self.STATE = VehicleStates.landing
@@ -384,12 +382,10 @@ class Tower(object):
       self.STATE = VehicleStates.landed
 
   def land_attitude(self):
-
     initial_alt = self.vehicle.location.global_relative_frame.alt
 
     while((initial_alt - self.vehicle.location.global_relative_frame.alt) >= self.LAND_ALTITUDE):
       self.set_angle_thrust(StandardAttitudes.level, StandardThrusts.land)
-    print "Disarming Drone"
     self.disarm_drone()
 
   def land_guided(self):
@@ -398,51 +394,49 @@ class Tower(object):
 
     while((initial_alt - self.vehicle.location.global_relative_frame.alt) >= self.LAND_ALTITUDE):
       self.send_ned_velocity(0, 0, 0.3)
-    print "Disarming Drone"
     self.disarm_drone()
 
+  # def do_circle_turn(self, desired_angle, direction, duration):
+  #   if(duration > self.MAX_TURN_TIME):
+  #     return
 
-  def do_circle_turn(self, desired_angle, direction, duration):
-    if(duration > self.MAX_TURN_TIME):
-      return
+  #   self.STATE = VehicleStates.flying
 
-    self.STATE = VehicleStates.flying
+  #   max_angle = math.radians(desired_angle)
+  #   altitude_to_hold = self.vehicle.location.global_relative_frame.alt
 
-    max_angle = math.radians(desired_angle)
-    altitude_to_hold = self.vehicle.location.global_relative_frame.alt
+  #   duration = timedelta(seconds=duration)
+  #   end_manuever = datetime.now() + duration
 
-    duration = timedelta(seconds=duration)
-    end_manuever = datetime.now() + duration
+  #   self.fly_for_time(1, StandardAttitudes.forward, self.TURN_START_VELOCITY, False)
 
-    self.fly_for_time(1, StandardAttitudes.forward, self.TURN_START_VELOCITY, False)
+  #   while(end_manuever <= datetime.now()):
+  #     change_in_time = end_manuever - datetime.now()
+  #     current_altitude = self.vehicle.location.global_relative_frame.alt
 
-    while(end_manuever <= datetime.now()):
-      change_in_time = end_manuever - datetime.now()
-      current_altitude = self.vehicle.location.global_relative_frame.alt
+  #     roll_angle = max_angle * (math.cos(self.vehicle.airspeed * change_in_time.seconds) / self.TURN_RADIUS)
+  #     pitch_angle = max_angle * (math.sin(self.vehicle.airspeed * change_in_time.seconds) / self.TURN_RADIUS)
 
-      roll_angle = max_angle * (math.cos(self.vehicle.airspeed * change_in_time.seconds) / self.TURN_RADIUS)
-      pitch_angle = max_angle * (math.sin(self.vehicle.airspeed * change_in_time.seconds) / self.TURN_RADIUS)
+  #     roll_angle = math.degrees(roll_angle)
+  #     pitch_angle = math.degrees(pitch_angle)
+  #     self.last_attitude.yaw = math.degrees(self.last_attitude.yaw)
 
-      roll_angle = math.degrees(roll_angle)
-      pitch_angle = math.degrees(pitch_angle)
-      self.last_attitude.yaw = math.degrees(self.last_attitude.yaw)
+  #     updated_attitude = DroneAttitude(pitch_angle, self.last_attitude.yaw, roll_angle)
 
-      updated_attitude = DroneAttitude(pitch_angle, self.last_attitude.yaw, roll_angle)
+  #     self.set_angle_thrust(updated_attitude, StandardThrusts.hover)
 
-      self.set_angle_thrust(updated_attitude, StandardThrusts.hover)
+  #     print("Sent message.")
 
-      print("Sent message.")
+  #     if(current_altitude > altitude_to_hold):
+  #       max_angle = math.radians(desired_angle + self.STANDARD_ANGLE_ADJUSTMENT)
+  #     elif(current_altitude < altitude_to_hold):
+  #       max_angle = math.radians(desired_angle - self.STANDARD_ANGLE_ADJUSTMENT)
+  #     else:
+  #       max_angle = math.radians(desired_angle)
 
-      if(current_altitude > altitude_to_hold):
-        max_angle = math.radians(desired_angle + self.STANDARD_ANGLE_ADJUSTMENT)
-      elif(current_altitude < altitude_to_hold):
-        max_angle = math.radians(desired_angle - self.STANDARD_ANGLE_ADJUSTMENT)
-      else:
-        max_angle = math.radians(desired_angle)
+  #     sleep(self.STANDARD_SLEEP_TIME)
 
-      sleep(self.STANDARD_SLEEP_TIME)
-
-    self.fly_for_time(1, StandardAttitudes.forward, self.vehicle.airspeed, True)
+  #   self.fly_for_time(1, StandardAttitudes.forward, self.vehicle.airspeed, True)
 
   def switch_gimbal_mode(self):
       gimbal = serial.Serial("/dev/ttyS1", 115200, timeout=10)
@@ -474,7 +468,7 @@ class FailsafeController(threading.Thread):
       if(self.atc.realsense_range_finder != None):
         self.atc.send_distance_message()
       if(self.atc.scanse != None):
-        self.atc.send_distance_lidar_message()
+        self.atc.send_lidar_message()
       sleep(0.01) 
 
   def join(self, timeout=None):
