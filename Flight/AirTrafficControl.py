@@ -83,7 +83,7 @@ class VehicleStates(object):
   landed = "LANDED"
 
 class Tower(object):
-  SIMULATOR = "127.0.0.1:14550"
+  SIMULATOR = "127.0.0.1:14552"
   USB = "/dev/serial/by-id/usb-3D_Robotics_PX4_FMU_v2.x_0-if00"
   USB_DEV = "/dev/cu.usbmodem1"
   BEBOP = "tcp:192.168.42.1:14550"
@@ -140,7 +140,7 @@ class Tower(object):
         sys.stdout = self.flight_log
 
       print("\nConnecting via USB to PixHawk...")
-      self.vehicle = dronekit.connect(self.SIMULATOR, wait_ready=True)
+      self.vehicle = dronekit.connect(self.USB_DEV, wait_ready=True)
 
       if not self.vehicle:
         print("\nUnable to connect to vehicle.")
@@ -286,6 +286,28 @@ class Tower(object):
 
     self.land()
 
+  def smo_switch(self):
+    self.takeoff(1.75)
+
+    self.switch_control("GUIDED")
+
+    sleep(2)
+
+    self.send_ned_velocity(1, 0, -0.1)
+    self.send_ned_velocity(1, 0, -0.1)
+
+    self.land()
+
+  def smo_attitude(self):
+    self.takeoff(1.75)
+
+    sleep(2)
+
+    self.set_angle_thrust(StandardAttitudes.forward, StandardThrusts.low)
+    self.set_angle_thrust(StandardAttitudes.forward, StandardThrusts.low)
+
+    self.land()
+
   def send_ned_velocity(self, velocity_x, velocity_y, velocity_z):
     """
     Move vehicle in direction based on specified velocity vectors.
@@ -302,22 +324,6 @@ class Tower(object):
     self.vehicle.send_mavlink(message)
     self.vehicle.commands.upload()
     sleep(0.01)
-
-  def send_distance_message(self):
-    distance = self.realsense_range_finder.get_average_depth()
-
-    message = self.vehicle.message_factory.distance_sensor_encode(
-        0,                                             # time since system boot, not used
-        self.MIN_REALSENSE_DISTANCE_CM,                # min distance cm
-        self.MAX_REALSENSE_DISTANCE_CM,                # max distance cm
-        distance,                                      # current distance, must be int
-        0,                                             # type = laser
-        0,                                             # onboard id, not used
-        self.MAV_SENSOR_ROTATION_PITCH_270,            # must be set to MAV_SENSOR_ROTATION_PITCH_270   
-        0                                              # covariance, not used
-    )
-    self.vehicle.send_mavlink(message)
-    self.vehicle.commands.upload()
 
   def send_distance_lidar_message(self):
 
@@ -368,55 +374,6 @@ class Tower(object):
     self.arm_drone()
     self.vehicle.simple_takeoff(target_altitude)
     self.hover()
-
-  def fly_for_time(self, duration, direction, target_velocity, should_hover_on_finish):
-    end_manuever = datetime.now() + timedelta(seconds=duration)
-
-    self.STATE = VehicleStates.flying
-    self.set_angle_thrust(direction, StandardThrusts.hover)
-
-    while(datetime.now() < end_manuever):
-
-      print(self.vehicle.airspeed,)
-      print(self.vehicle.velocity,)
-
-      updated_attitude = deepcopy(self.LAST_ATTITUDE)
-
-      if(self.vehicle.airspeed < target_velocity):
-        updated_attitude.pitch_deg -= 1
-      elif(self.vehicle.airspeed > target_velocity):
-        updated_attitude.pitch_deg += 1
-      else:
-        updated_attitude.pitch_deg = direction.pitch_deg
-
-      if(updated_attitude.pitch_deg < -self.MAX_ANGLE_ALL_AXIS):
-        updated_attitude.pitch_deg = -self.MAX_ANGLE_ALL_AXIS
-
-      if(updated_attitude.pitch_deg > self.MAX_ANGLE_ALL_AXIS):
-        updated_attitude.pitch_deg = self.MAX_ANGLE_ALL_AXIS
-
-      if(updated_attitude.roll_deg < -self.MAX_ANGLE_ALL_AXIS):
-        updated_attitude.roll_deg = -self.MAX_ANGLE_ALL_AXIS
-
-      if(updated_attitude.roll_deg > self.MAX_ANGLE_ALL_AXIS):
-        updated_attitude.roll_deg = self.MAX_ANGLE_ALL_AXIS
-
-      if(updated_attitude.yaw_deg < -self.MAX_ANGLE_ALL_AXIS):
-        updated_attitude.yaw_deg = -self.MAX_ANGLE_ALL_AXIS
-
-      if(updated_attitude.yaw_deg > self.MAX_ANGLE_ALL_AXIS):
-        updated_attitude.yaw_deg = self.MAX_ANGLE_ALL_AXIS
-
-      updated_attitude.pitch = math.radians(updated_attitude.pitch_deg)
-      updated_attitude.quaternion = updated_attitude.get_quaternion()
-
-      self.set_angle_thrust(updated_attitude, self.LAST_THRUST)
-
-      print(updated_attitude.pitch_deg,)
-
-    if(should_hover_on_finish):
-      self.hover()
-      pass
 
   def land(self):
     self.vehicle.mode = dronekit.VehicleMode("LAND")
