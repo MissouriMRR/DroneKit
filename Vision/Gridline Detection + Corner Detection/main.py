@@ -113,8 +113,8 @@ with VideoReader(VIDEO_FILE_NAME) as video, cv2Window(WINDOW_TITLE) as window:
   while frame is not None and not quit:
     lineCoords, rectCentroids = detectLinesAndCorners(frame)
 
-    for (x1, y1, x2, y2) in lineCoords:
-      cv2.line(frame, (x1, y1), (x2, y2), RED, LINE_THICKNESS)
+    # for (x1, y1, x2, y2) in lineCoords:
+    #   cv2.line(frame, (x1, y1), (x2, y2), RED, LINE_THICKNESS)
     for (x, y) in rectCentroids:
       cv2.circle(frame, (x, y), CIRCLE_RADIUS, GREEN, CIRCLE_THICKNESS)
 

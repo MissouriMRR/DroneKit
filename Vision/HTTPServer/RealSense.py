@@ -70,11 +70,11 @@ class Streamer():
 		if block:
 			self.cam.wait_for_frames()
 		else:
-			if not self.poll_for_frame():
+			if not self.cam.poll_for_frame():
 				return None
 
 		colorConversionCode = _color_conversions.get(self.stream.format)
-		img = getattr(self.cam, _stream_names.get(self.flag))
+		img = self.cam.color
 
 		if colorConversionCode:
 			img = cv2.cvtColor(img, colorConversionCode)
@@ -96,16 +96,13 @@ class LiveDisplay():
 	def updateFPS(self, fps):
 		self.window.setTitle('%s (%d FPS)' % (self.originalWindowTitle, fps))
 
-	def getNextFrame(self):
-		return self.stream.next()
-
 	def run(self, callback = None, keyToQuit = 'q'):
 		quit = False
 		start = timer()
 		frames = 0
 
 		while not quit:
-			img = self.getNextFrame()
+			img = self.stream.next()
 			if callback is not None: callback(img)
 			self.window.show(img)
 

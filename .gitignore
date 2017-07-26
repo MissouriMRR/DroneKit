@@ -109,3 +109,5 @@ ENV/
 #Ignore dataset files
 /Vision/Face Detection/data/*.hdf
 Flight/Tests
+
+/Vision/Gridline Detection + Corner Detection/IARC 2016 Footage.mp4

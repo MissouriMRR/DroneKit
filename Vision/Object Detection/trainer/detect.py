@@ -17,6 +17,8 @@ NET_48_THRESH = .3
 NUM_PYRAMID_LEVELS = 5
 PYRAMID_DOWNSCALE = 1.25
 
+NUM_CALIBRATION_STEPS = 1
+
 def IoU(boxes, box, area=None):
     int_x1, int_y1, int_x2, int_y2 = ((np.maximum if i < 2 else np.minimum)(boxes[:, i], box[i]) for i in np.arange(boxes.shape[1]))
     area = (boxes[:,2]-boxes[:,0])*(boxes[:,3]-boxes[:, 1]) if not area else area
@@ -142,14 +144,12 @@ def detectMultiscale(img, maxStageIdx=len(SCALES)-1, minObjectScale = MIN_OBJECT
         if stageIdx == maxStageIdx:
             return coords.astype(np.int32, copy=False)
 
-def fastDetect(img, getDetectionWindows):
-    classifierInputs = []
-    calibratorInputs = []
-
+def fastDetect(img, getDetectionWindows, numCalibSteps = NUM_CALIBRATION_STEPS):
     stageIdx = 0
     curScale = SCALES[stageIdx][0]
 
     objectProposals, centers = getDetectionWindows(img)
+    centers = np.asarray(centers)
     totalNumDetectionWindows = len(objectProposals)
     detectionWindows = np.zeros((totalNumDetectionWindows, curScale, curScale, 3))
     coords = np.zeros((totalNumDetectionWindows, 4))
@@ -162,14 +162,18 @@ def fastDetect(img, getDetectionWindows):
     classifierNormalizer, calibNormalizer = NORMALIZERS[stageIdx]
     classifier, calibrator = MODELS[stageIdx]
 
-    detectionWindows = detectionWindows if stageIdx == 0 else getNetworkInputs(img, curScale, coords).astype(np.float)
-    classifierInputs.insert(0 if stageIdx < 2 else stageIdx, classifierNormalizer.preprocess(detectionWindows))
-    predictions = classifier.predict(classifierInputs)[:,1]
+    predictions = classifier.predict([classifierNormalizer.preprocess(detectionWindows)])[:,1]
     posDetectionIndices = np.where(predictions>=THRESHOLDS[stageIdx])
+    coords, centers, predictions, detectionWindows = coords[posDetectionIndices], centers[posDetectionIndices], predictions[posDetectionIndices], detectionWindows[posDetectionIndices]
 
-    calibratorInputs = [calibNormalizer.preprocess(detectionWindows[posDetectionIndices])]
-    calibPredictions = calibrator.predict(calibratorInputs)
-    coords = calibrateCoordinates(coords[posDetectionIndices], calibPredictions)
+    for i in np.arange(numCalibSteps-1):
+        detectionWindows = getNetworkInputs(img, curScale, coords).astype(np.float)
+        predictions = classifier.predict([classifierNormalizer.preprocess(detectionWindows)])[:,1]
+        
+        calibPredictions = calibrator.predict([calibNormalizer.preprocess(detectionWindows)])
+        coords = calibrateCoordinates(coords, calibPredictions)
 
-    coords, picked = nms(coords, predictions[posDetectionIndices], iouThresh = .1)
-    return coords.astype(np.int32, copy=False), np.asarray(centers)[posDetectionIndices][picked]
+        coords, picked = nms(coords, predictions)
+        centers = centers[picked]
+
+    return coords.astype(np.int32, copy=False), centers
