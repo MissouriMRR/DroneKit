@@ -24,7 +24,7 @@ import sys
 import time
 import threading
 import serial
-import RealSense
+import VisionServer
 
 class DroneAttitude():
 
@@ -90,7 +90,7 @@ class VehicleStates(object):
   landed = "LANDED"
 
 class Tower(object):
-  SIMULATOR = "127.0.0.1:14552"
+  SIMULATOR = "127.0.0.1:14550"
   USB = "/dev/serial/by-id/usb-3D_Robotics_PX4_FMU_v2.x_0-if00"
   USB_DEV = "/dev/cu.usbmodem1"
   BEBOP = "tcp:192.168.42.1:14550"
@@ -111,6 +111,9 @@ class Tower(object):
   MAX_LIDAR_DISTANCE = 500
   MAV_RANGEFINDER = 10
   MAV_PERIPHERAL_ID = 195
+  MIN_REALSENSE_DISTANCE_CM = 30
+  MAX_REALSENSE_DISTANCE_CM = 500
+  MAV_SENSOR_ROTATION_PITCH_270 = 25
   GIMBAL_PORTRAIT = "86 0 "
 
   def __init__(self):
@@ -119,14 +122,14 @@ class Tower(object):
     self.vehicle_initialized = False
     self.vehicle = None
     self.initial_yaw = 0
+    self.realsense_enable = False
     self.scanningField = False
-    self.realsense_range_finder = None
     self.scanse = None
     self.LAST_ATTITUDE = StandardAttitudes.level
     self.LAST_THRUST = StandardThrusts.none
     self.STATE = VehicleStates.unknown
 
-  def initialize(self, should_write_to_file=False, enable_realsense=False, enable_lidar=False):
+  def initialize(self, should_write_to_file=False, enable_realsense=False, frame_info_received=None, enable_lidar=False):
     """
     @purpose: Connect to the flight controller, start the failsafe
               thread, switch to GUIDED_NOGPS, and open a file to
@@ -141,7 +144,7 @@ class Tower(object):
         sys.stdout = self.flight_log
 
       print("\nConnecting via USB to PixHawk...")
-      self.vehicle = dronekit.connect(self.USB_DEV, wait_ready=True)
+      self.vehicle = dronekit.connect(self.SIMULATOR, wait_ready=True)
 
       if not self.vehicle:
         print("\nUnable to connect to vehicle.")
@@ -150,9 +153,9 @@ class Tower(object):
       self.vehicle.mode = dronekit.VehicleMode("STABILIZE")
       self.STATE = VehicleStates.landed
       self.vehicle_initialized = True
-      if(enable_realsense):
-        self.realsense_range_finder = RealSense.RangeFinder()
-        self.realsense_range_finder.initialize_camera()
+      self.realsense_enabled = enable_realsense
+      if(self.realsense_enabled):
+        VisionServer.initialize(frame_info_received)
       if(enable_lidar):
         self.scanse = LIDAR()
         self.scanse.connect_to_lidar()
@@ -306,12 +309,12 @@ class Tower(object):
     self.land()
 
   def smo_attitude(self):
-    self.takeoff(1.75)
+    self.takeoff(1.5)
 
     sleep(self.STANDARD_SLEEP_TIME)
 
-    self.set_angle_thrust(StandardAttitudes.forward, StandardThrusts.low)
-    self.set_angle_thrust(StandardAttitudes.forward, StandardThrusts.low)
+    self.set_angle_thrust(StandardAttitudes.backward, StandardThrusts.low)
+    self.set_angle_thrust(StandardAttitudes.backward, StandardThrusts.low)
 
     self.land()
 
@@ -367,17 +370,15 @@ class Tower(object):
         self.vehicle.send_mavlink(message)
         self.vehicle.commands.upload()
 
-  def send_distance_message(self):
-    distance = self.realsense_range_finder.get_average_depth()
-
+  def send_distance_message(self, distance):
     message = self.vehicle.message_factory.distance_sensor_encode(
         0,                                             # time since system boot, not used
-        self.realsense_range_finder.MIN_REALSENSE_DISTANCE_CM,                # min distance cm
-        self.realsense_range_finder.MAX_REALSENSE_DISTANCE_CM,                # max distance cm
+        self.MIN_REALSENSE_DISTANCE_CM,                # min distance cm
+        self.MAX_REALSENSE_DISTANCE_CM,                # max distance cm
         distance,                                      # current distance, must be int
         0,                                             # type = laser
         0,                                             # onboard id, not used
-        self.realsense_range_finder.MAV_SENSOR_ROTATION_PITCH_270,            # Downward facing range sensor.
+        self.MAV_SENSOR_ROTATION_PITCH_270,            # Downward facing range sensor.
         0                                              # covariance, not used
     )
     self.vehicle.send_mavlink(message)
@@ -401,7 +402,7 @@ class Tower(object):
     initial_alt = self.vehicle.location.global_relative_frame.alt
 
     while((self.vehicle.location.global_relative_frame.alt - initial_alt) < target_altitude):
-      self.set_angle_thrust(DroneAttitude(0,0, math.radians(self.initial_yaw)), StandardThrusts.takeoff)
+      self.set_angle_thrust(DroneAttitude(0, 0, 0), StandardThrusts.takeoff)
       sleep(self.STANDARD_SLEEP_TIME)
 
     print('Reached target altitude:{0:.2f}m'.format(self.vehicle.location.global_relative_frame.alt))
@@ -498,8 +499,9 @@ class FailsafeController(threading.Thread):
     while not self.stoprequest.isSet():
       if self.atc.STATE == VehicleStates.hover or self.atc.STATE == VehicleStates.flying:
         self.atc.check_battery_voltage()
-      if(self.atc.realsense_range_finder != None):
-        self.atc.send_distance_message()
+      # if(self.atc.realsense_enabled):
+      #   if(VisionServer.SentinelServer.stream != None):
+      #     self.atc.send_distance_message(VisionServer.SentinelServer.stream.get_average_depth())
       if(self.atc.scanse != None):
         self.atc.send_lidar_message()
       sleep(0.01) 
@@ -508,8 +510,6 @@ class FailsafeController(threading.Thread):
     if self.atc.vehicle.armed:
       if self.atc.STATE != VehicleStates.landed:
         self.atc.land()
-        if(self.atc.realsense_range_finder != None):
-          self.atc.realsense_range_finder.shutdown()
         if(self.atc.scanse != None):
           self.atc.scanse.shutdown()
     self.stoprequest.set()
